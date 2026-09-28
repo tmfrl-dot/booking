@@ -25,7 +25,7 @@ async function api(action,data){
 }
 function toast(t){const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.appendChild(el);setTimeout(()=>el.remove(),2400)}
 function copy(text){
-  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>toast('복사했습니다'),()=>toast('길게 눌러 직접 복사해 주세요'))}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>toast('복사되었습니다'),()=>toast('길게 눌러 직접 복사해 주세요'))}
   else toast('길게 눌러 직접 복사해 주세요');
 }
 const store={get(k){try{return JSON.parse(localStorage.getItem('opu-'+k))}catch(e){return null}},set(k,v){try{localStorage.setItem('opu-'+k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem('opu-'+k)}catch(e){}}};

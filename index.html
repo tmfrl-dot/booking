@@ -21,8 +21,8 @@
 <script>
 (function(){
 const {C,SLOTS,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,copy,store}=U;
-const payBox=()=>C.PAY?`<button type="button" class="paybox" data-acct="1"><span class="pl">입금 계좌 · 누르면 복사돼요</span><b>${esc(C.PAY.bank)} ${esc(C.PAY.num)}</b><span>예금주 ${esc(C.PAY.holder)}</span><em>계좌번호 복사</em></button>`:'';
-document.addEventListener('click',e=>{const b=e.target.closest('[data-acct]');if(!b)return;copy(C.PAY.bank+' '+C.PAY.num.replace(/-/g,''));const t=b.querySelector('em');if(t)t.textContent='복사했어요 · 은행 앱에 붙여넣기 하세요'});
+const payBox=()=>C.PAY?`<button type="button" class="paybox" data-acct="1"><span class="pl">입금 계좌 · 누르면 복사됩니다</span><b>${esc(C.PAY.bank)} ${esc(C.PAY.num)}</b><span>예금주 ${esc(C.PAY.holder)}</span><em>계좌번호 복사</em></button>`:'';
+document.addEventListener('click',e=>{const b=e.target.closest('[data-acct]');if(!b)return;copy(C.PAY.bank+' '+C.PAY.num.replace(/-/g,''));const t=b.querySelector('em');if(t)t.textContent='복사되었습니다'});
 const app=document.getElementById('app'),layer=document.getElementById('layer');
 const closeSheet=()=>{layer.innerHTML=''};
 const token=new URLSearchParams(location.search).get('c');
