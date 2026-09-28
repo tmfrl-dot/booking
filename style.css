@@ -213,3 +213,4 @@ h2{font-weight:800;font-size:21px;letter-spacing:-0.02em;margin:28px 0 10px}
 .paybox b{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
 .paybox span{font-size:14px}
 .paybox em{font-style:normal;font-size:14px;font-weight:700;color:var(--heart);margin-top:4px}
+.syncbar{position:fixed;top:12px;right:12px;z-index:60;background:var(--ink);color:var(--bg);font-size:12px;font-weight:600;padding:5px 11px;border-radius:999px;opacity:.8;pointer-events:none}

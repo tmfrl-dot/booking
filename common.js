@@ -23,11 +23,12 @@ async function api(action,data){
   if(!j.ok)throw Object.assign(new Error(j.error||'문제가 생겼습니다.'),j);
   return j;
 }
+function syncing(on){let el=document.getElementById('syncbar');if(on){if(!el){el=document.createElement('div');el.id='syncbar';el.className='syncbar';el.textContent='최신 정보 확인 중…';document.body.appendChild(el)}}else if(el)el.remove()}
 function toast(t){const el=document.createElement('div');el.className='toast';el.textContent=t;document.body.appendChild(el);setTimeout(()=>el.remove(),2400)}
 function copy(text){
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>toast('복사되었습니다'),()=>toast('길게 눌러 직접 복사해 주세요'))}
   else toast('길게 눌러 직접 복사해 주세요');
 }
 const store={get(k){try{return JSON.parse(localStorage.getItem('opu-'+k))}catch(e){return null}},set(k,v){try{localStorage.setItem('opu-'+k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem('opu-'+k)}catch(e){}}};
-window.U={C,SLOTS,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,copy,store};
+window.U={C,SLOTS,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,copy,store,syncing};
 })();

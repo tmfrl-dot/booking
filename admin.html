@@ -18,7 +18,7 @@
 <script src="common.js"></script>
 <script>
 (function(){
-const {C,SLOTS,key,parse,fmt,fmtShort,esc,brand,loading,api,toast,copy,store}=U;
+const {C,SLOTS,key,parse,fmt,fmtShort,esc,brand,loading,api,toast,copy,store,syncing}=U;
 const app=document.getElementById('app'),layer=document.getElementById('layer');
 const closeSheet=()=>{layer.innerHTML=''};
 let KEY=store.get('adminKey'), D=null, tab='req';
@@ -53,10 +53,15 @@ function login(msg){
   };
 }
 async function load(quiet){
-  if(!quiet||!D)app.innerHTML=brand('관리 화면 · 컨설팅 폰 전용')+loading();
-  try{D=await api('admin_list',{key:KEY});render()}
+  // 처음 열 때는 지난번 목록을 바로 보여주고, 뒤에서 최신 목록으로 바꿈
+  const cached=!D&&store.get('adminD');
+  if(cached&&cached.customers){D=cached;render();syncing(true)}
+  else if(!quiet||!D)app.innerHTML=brand('관리 화면 · 컨설팅 폰 전용')+loading();
+  try{const r=await api('admin_list',{key:KEY});D=r;store.set('adminD',r);syncing(false);if(!cached||!layer.innerHTML)render()}
   catch(e){
-    if(e.auth===false){store.del('adminKey');return login(e.message)}
+    syncing(false);
+    if(e.auth===false){store.del('adminKey');store.del('adminD');return login(e.message)}
+    if(cached){toast('최신 목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.');return}
     app.innerHTML=brand('관리 화면')+`<div class="errbox" style="margin-top:20px">${esc(e.message)}<br><button class="btn sm" id="retry">다시 불러오기</button></div>`;
     document.getElementById('retry').onclick=()=>load();
   }
