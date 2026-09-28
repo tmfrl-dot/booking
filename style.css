@@ -195,3 +195,14 @@ h2{font-weight:800;font-size:21px;letter-spacing:-0.02em;margin:28px 0 10px}
 .top{padding-top:20px}
 .btn:disabled{opacity:.5;cursor:default}
 .refresh{border:0;background:none;color:var(--sub);font-size:14px;text-decoration:underline;padding:4px 0}
+.plist{display:grid;gap:6px;margin:10px 0 12px}
+.plist .pick{margin:0}
+.prow{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.px{border:0;background:none;font-size:16px;color:var(--sub);padding:2px 6px}
+.mini .cal{padding:6px}
+.mini .cell{min-height:50px}
+.cell.sel{background:var(--heart-soft)}
+.slot.open.chosen{background:var(--heart-soft);border-color:var(--heart)}
+.slot.open.chosen:hover{background:var(--heart-soft);color:var(--ink)}
+.cell,.slot .t{overflow-wrap:normal}
+.cell .n{white-space:nowrap}

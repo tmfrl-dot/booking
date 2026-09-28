@@ -110,15 +110,16 @@ function renderList(){
 }
 function openForm(k,s){
   const saved=store.get('me')||{};
+  const MAX=C.REPEAT_MAX;
+  let picks=[{date:k,slot:s}], open=false, mm=new Date(parse(k).getFullYear(),parse(k).getMonth(),1), md=null;
+  const has=(d,sl)=>picks.some(p=>p.date===d&&p.slot===sl);
+  const sortP=()=>picks.sort((a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot));
   layer.innerHTML=`<div class="sheet-bg" id="bg"><form class="sheet" id="f" novalidate>
     <h3>예약 신청</h3>
-    <div class="pick">${fmt(k)} ${SLOTS[s].label}</div>
+    <div id="plist" class="plist"></div>
+    <div id="more"></div>
     <div class="field"><label for="f-name">이름</label><input id="f-name" autocomplete="name" placeholder="홍길동" value="${esc(saved.name||'')}"></div>
     <div class="field"><label for="f-phone">휴대폰 번호</label><input id="f-phone" inputmode="tel" autocomplete="tel" placeholder="010-1234-5678" value="${esc(saved.phone||'')}"></div>
-    <div class="field"><label>같은 요일·시간으로 이어서 신청</label>
-      <div class="rep" role="group" aria-label="반복 횟수">${Array.from({length:C.REPEAT_MAX},(_,i)=>i+1).map(n=>`<button type="button" id="rep-${n}" data-n="${n}" aria-pressed="${n===1}">${n===1?'이번만':n+'주'}</button>`).join('')}</div>
-      <div id="replist" class="replist"></div>
-    </div>
     <div class="field"><label for="f-note">남기실 말씀 <span class="muted">(안 써도 됩니다)</span></label><textarea id="f-note"></textarea></div>
     <p class="err" id="f-err"></p>
     <button class="btn" type="submit" id="f-go">신청하기</button>
@@ -126,21 +127,57 @@ function openForm(k,s){
   </form></div>`;
   document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')closeSheet()};
   document.getElementById('f-cancel').onclick=closeSheet;
-  let reps=1;const off={};
-  const repDates=()=>{const o=[];for(let i=0;i<reps;i++)o.push(key(addDays(parse(k),i*7)));return o};
-  const chosen=()=>repDates().filter(dk=>st(dk,s)==='open'&&!off[dk]);
-  function drawRep(){
-    document.querySelectorAll('.rep button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.n===reps));
-    const box=document.getElementById('replist');
-    if(reps===1){box.innerHTML='';return}
-    box.innerHTML=repDates().map((dk,i)=>{const ok=st(dk,s)==='open';const info=D.days[dk];
-      const why=!info?'예약 기간 밖':(info.h||'마감');
-      return `<label class="${ok?'':'no'}"><input type="checkbox" id="rp-${dk}" data-k="${dk}" ${ok&&!off[dk]?'checked':''} ${ok&&i>0?'':'disabled'}><span>${fmt(dk)} ${SLOTS[s].tag}</span><em>${ok?(i===0?'처음 고른 날':''):esc(why)}</em></label>`}).join('')
-      +`<p class="muted" style="margin:4px 0 0">마감된 날은 신청에서 제외됩니다. 원하시는 다른 날은 따로 골라주세요.</p>`;
-    box.querySelectorAll('input[data-k]').forEach(c=>c.onchange=()=>{off[c.dataset.k]=!c.checked});
+  function drawList(){
+    sortP();
+    const el=document.getElementById('plist');
+    el.innerHTML=picks.map((p,i)=>`<div class="pick prow"><span>${fmt(p.date)} ${SLOTS[p.slot].label}</span>${picks.length>1?`<button type="button" class="px" data-i="${i}" aria-label="이 날짜 빼기">✕</button>`:''}</div>`).join('');
+    el.querySelectorAll('.px').forEach(b=>b.onclick=()=>{picks.splice(+b.dataset.i,1);drawList();drawMore()});
+    document.getElementById('f-go').textContent=picks.length>1?picks.length+'건 신청하기':'신청하기';
   }
-  document.querySelectorAll('.rep button').forEach(b=>b.onclick=()=>{reps=+b.dataset.n;drawRep()});
-  drawRep();
+  function drawMore(){
+    const box=document.getElementById('more');
+    if(!open){
+      box.innerHTML=picks.length<MAX?`<button type="button" class="btn ghost addd" id="addd">+ 다른 날짜도 같이 신청하기</button><p class="muted" style="margin:6px 0 14px">이름과 연락처는 한 번만 쓰시면 됩니다. 최대 ${MAX}건까지 한 번에 신청할 수 있어요.</p>`:`<p class="muted" style="margin:0 0 14px">한 번에 최대 ${MAX}건까지 신청할 수 있어요.</p>`;
+      const b=document.getElementById('addd');if(b)b.onclick=()=>{open=true;drawMore()};
+      return;
+    }
+    const y=mm.getFullYear(),m=mm.getMonth(),first=new Date(y,m,1),days=new Date(y,m+1,0).getDate();
+    const t=parse(D.today),minM=new Date(t.getFullYear(),t.getMonth(),1),l=parse(D.last),maxM=new Date(l.getFullYear(),l.getMonth(),1);
+    let h=`<div class="mini"><div class="monnav"><button type="button" class="navbtn" id="xp" ${mm<=minM?'disabled':''} aria-label="이전 달">‹</button><strong>${m+1}월</strong><button type="button" class="navbtn" id="xn" ${mm>=maxM?'disabled':''} aria-label="다음 달">›</button></div>
+      <div class="cal"><div class="wk">${WD.map(w=>`<div>${w}</div>`).join('')}</div><div class="grid">`;
+    for(let i=0;i<first.getDay();i++)h+='<div></div>';
+    for(let d=1;d<=days;d++){
+      const dk=key(new Date(y,m,d)),w=new Date(y,m,d).getDay();
+      const cls=[];if(w===0||(D.days[dk]&&D.days[dk].h))cls.push('hol');
+      if(!bookable(dk)){h+=`<div class="cell dim ${cls.join(' ')}"><span class="n">${d}</span></div>`;continue}
+      const a=st(dk,'am'),p=st(dk,'pm');
+      if(a!=='open'&&p!=='open'){h+=`<div class="cell full dim"><span class="n">${d}</span><span class="hs">${heart(true)}${heart(true)}</span></div>`;continue}
+      if(picks.some(x=>x.date===dk))cls.push('sel');
+      if(md===dk)cls.push('pick');
+      h+=`<button type="button" class="cell ${cls.join(' ')}" data-d="${dk}"><span class="n">${d}</span><span class="hs">${heart(a!=='open'||has(dk,'am'))}${heart(p!=='open'||has(dk,'pm'))}</span></button>`;
+    }
+    h+=`</div></div><div id="mslot"></div><button type="button" class="btn ghost" id="xdone" style="margin:8px 0 14px">날짜 고르기 끝</button></div>`;
+    box.innerHTML=h;
+    document.getElementById('xp').onclick=()=>{mm=new Date(y,m-1,1);md=null;drawMore()};
+    document.getElementById('xn').onclick=()=>{mm=new Date(y,m+1,1);md=null;drawMore()};
+    document.getElementById('xdone').onclick=()=>{open=false;md=null;drawMore()};
+    box.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{md=c.dataset.d;drawMore()});
+    if(md){
+      const ms=document.getElementById('mslot');
+      ms.innerHTML=`<p class="t" style="font-weight:800;margin:10px 0 6px">${fmt(md)}</p><div class="slots">${['am','pm'].map(sl=>{
+        if(st(md,sl)!=='open')return `<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">${heart(true)}마감</span></div>`;
+        const on=has(md,sl);
+        return `<button type="button" class="slot open ${on?'chosen':''}" data-s="${sl}"><span class="t">${SLOTS[sl].label}</span><span class="s">${heart(on)}${on?'선택됨 · 다시 누르면 빼기':'누르면 추가'}</span></button>`}).join('')}</div>`;
+      ms.querySelectorAll('.slot.open').forEach(b=>b.onclick=()=>{
+        const sl=b.dataset.s,i=picks.findIndex(x=>x.date===md&&x.slot===sl);
+        if(i>=0){if(picks.length>1)picks.splice(i,1)}
+        else{if(picks.length>=MAX){document.getElementById('f-err').textContent=`한 번에 최대 ${MAX}건까지 신청할 수 있어요.`;return}picks.push({date:md,slot:sl})}
+        document.getElementById('f-err').textContent='';
+        drawList();drawMore();
+      });
+    }
+  }
+  drawList();drawMore();
   document.getElementById('f').onsubmit=async e=>{
     e.preventDefault();
     const name=document.getElementById('f-name').value.trim();
@@ -148,21 +185,19 @@ function openForm(k,s){
     const err=document.getElementById('f-err');err.textContent='';
     if(!name){err.textContent='이름을 적어주세요.';return}
     if(phone.length<10||phone.length>11){err.textContent='휴대폰 번호를 숫자로 적어주세요. 예) 01012345678';return}
-    const dates=chosen();
-    if(!dates.length){err.textContent='신청할 날짜를 하나 이상 골라주세요.';return}
     const go=document.getElementById('f-go');go.disabled=true;go.textContent='신청하는 중…';
     try{
-      const r=await api('book',{name,phone,slot:s,dates,note:document.getElementById('f-note').value.trim()});
+      const r=await api('book',{name,phone,items:sortP(),note:document.getElementById('f-note').value.trim()});
       store.set('me',{name,phone});
       layer.innerHTML=`<div class="sheet-bg"><div class="sheet done">
         <svg class="bigheart" viewBox="0 0 24 24" aria-hidden="true">${HEART}</svg>
         <h3>${esc(name)}님, 신청되었습니다</h3>
-        <p class="lead">${r.booked.map(fmt).join('<br>')}<br>${SLOTS[s].label}<br><br>확정되면 <b>문자로 알려드립니다.</b></p>
-        ${r.skipped.length?`<p class="muted">${r.skipped.map(fmt).join(', ')}은 방금 마감되어 빠졌습니다.</p>`:''}
+        <p class="lead">${r.booked.map(x=>fmt(x.date)+' '+SLOTS[x.slot].label).join('<br>')}<br><br>확정되면 <b>문자로 알려드립니다.</b></p>
+        ${r.skipped.length?`<p class="muted">${r.skipped.map(x=>fmt(x.date)+' '+SLOTS[x.slot].tag).join(', ')}은 방금 마감되어 빠졌습니다.</p>`:''}
         <button class="btn" id="ok">확인</button></div></div>`;
       document.getElementById('ok').onclick=()=>{closeSheet();pickDay=null;loadSlots()};
     }catch(ex){
-      go.disabled=false;go.textContent='신청하기';
+      go.disabled=false;go.textContent=picks.length>1?picks.length+'건 신청하기':'신청하기';
       err.textContent=ex.message;
       if(ex.full){D=null;loadSlots()}
     }
