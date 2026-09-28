@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>원포인트업 예약 관리</title>
+<link rel="icon" href="logo.jpg">
+<link rel="apple-touch-icon" href="logo.jpg">
+<meta name="apple-mobile-web-app-title" content="예약 관리">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap top"><main id="app"></main></div>
+<div id="layer"></div>
+<script src="config.js"></script>
+<script src="common.js"></script>
+<script>
+(function(){
+const {C,SLOTS,key,parse,fmt,fmtShort,esc,brand,loading,api,toast,copy,store}=U;
+const app=document.getElementById('app'),layer=document.getElementById('layer');
+const closeSheet=()=>{layer.innerHTML=''};
+let KEY=store.get('adminKey'), D=null, tab='req';
+const BASE=location.href.split('#')[0].split('?')[0].replace(/admin\.html$/,'');
+const myLink=cid=>BASE+'?c='+cid;
+const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
+const smsHref=(phone,text)=>'sms:'+phone.replace(/-/g,'')+(isIOS?'&':'?')+'body='+encodeURIComponent(text);
+const cust=id=>D.customers.find(c=>c.id===id);
+const active=b=>b.status==='pending'||b.status==='confirmed';
+const order=(a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot);
+const needList=cid=>D.bookings.filter(b=>b.cid===cid&&b.rebook).sort(order);
+const doneCount=cid=>D.bookings.filter(b=>b.cid===cid&&b.status==='done').length;
+
+function login(msg){
+  app.innerHTML=`${brand('관리 화면')}
+  <h1>관리자 확인</h1>
+  <p class="lead">관리 비밀번호를 입력해 주세요. 이 폰에서는 한 번만 입력하면 됩니다.</p>
+  <form id="lg" class="card" novalidate>
+    <div class="field"><label for="k">비밀번호</label><input id="k" type="password" autocomplete="current-password"></div>
+    <p class="err" id="k-err">${esc(msg||'')}</p>
+    <button class="btn" type="submit" id="k-go">들어가기</button>
+  </form>`;
+  document.getElementById('lg').onsubmit=async e=>{
+    e.preventDefault();const v=document.getElementById('k').value.trim();if(!v)return;
+    const go=document.getElementById('k-go');go.disabled=true;go.textContent='확인하는 중…';
+    try{await api('admin_check',{key:v});KEY=v;store.set('adminKey',v);load()}
+    catch(ex){login(ex.message)}
+  };
+}
+async function load(quiet){
+  if(!quiet||!D)app.innerHTML=brand('관리 화면 · 컨설팅 폰 전용')+loading();
+  try{D=await api('admin_list',{key:KEY});render()}
+  catch(e){
+    if(e.auth===false){store.del('adminKey');return login(e.message)}
+    app.innerHTML=brand('관리 화면')+`<div class="errbox" style="margin-top:20px">${esc(e.message)}<br><button class="btn sm" id="retry">다시 불러오기</button></div>`;
+    document.getElementById('retry').onclick=()=>load();
+  }
+}
+const run=async(fn,btn,okMsg)=>{
+  if(btn){btn.disabled=true;btn.dataset.t=btn.textContent;btn.textContent='처리 중…'}
+  try{const r=await fn();if(okMsg)toast(okMsg);return r}
+  catch(e){toast(e.message);if(e.auth===false){store.del('adminKey');login(e.message)}throw e}
+  finally{if(btn&&btn.isConnected){btn.disabled=false;btn.textContent=btn.dataset.t}}
+};
+
+function render(){
+  const today=D.today;
+  const pend=D.bookings.filter(b=>b.status==='pending'&&b.date>today).sort(order);
+  const groups=[];pend.forEach(b=>{const g=b.group||b.id;let G=groups.find(x=>x.g===g);if(!G){G={g,list:[]};groups.push(G)}G.list.push(b)});
+  app.innerHTML=`${brand('관리 화면 · 컨설팅 폰 전용')}
+  <div style="display:flex;justify-content:space-between;align-items:end;gap:8px"><h1>오늘 확인할 일</h1><button class="refresh" id="rf">새로고침</button></div>
+  <p class="lead">확정 문자는 이 폰 번호(${C.PHONE})로 나갑니다.</p>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="t-req" aria-selected="${tab==='req'}" data-t="req">신청 대기${groups.length?`<span class="count">${groups.length}</span>`:''}</button>
+    <button role="tab" id="t-sch" aria-selected="${tab==='sch'}" data-t="sch">일정</button>
+    <button role="tab" id="t-cus" aria-selected="${tab==='cus'}" data-t="cus">고객 회차</button>
+  </div><div id="panel"></div>
+  <p class="muted" style="margin-top:28px">고객 예약 화면: <a href="${BASE}">${esc(BASE)}</a></p>`;
+  document.getElementById('rf').onclick=()=>load();
+  app.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.t;render()});
+  const p=document.getElementById('panel');
+  if(tab==='req'){
+    if(!groups.length){p.innerHTML='<div class="card muted">새 신청이 없습니다.</div>';return}
+    p.innerHTML=groups.map(G=>{const b=G.list[0];const c=cust(b.cid)||{name:'(알 수 없음)',phone:'',total:4};
+      const n=G.list.length;const held=D.bookings.filter(x=>x.cid===b.cid&&(x.status==='confirmed'||x.status==='done'));
+      const all=held.concat(G.list).sort(order);const pr=G.list.map(x=>all.indexOf(x)+1);
+      const shift=held.some(x=>x.status==='confirmed'&&G.list.some(y=>order(y,x)<0));const nn=needList(b.cid).length;
+      return `<div class="card req"><div class="who">${esc(c.name)} <span class="muted">${esc(c.biz||'')}</span>${n>1?` <span class="badge b-wait">${n}회 한 번에 신청</span>`:''}</div>
+      <div>${G.list.map(x=>`<b>${fmt(x.date)} ${SLOTS[x.slot].label}</b>`).join('<br>')}</div>
+      <div class="meta">${esc(c.phone)} · ${pr.join(', ')}회차로 확정 예정 (총 ${c.total}회)</div>
+      ${shift?'<div class="meta">이미 잡힌 뒤 일정은 회차가 하나씩 밀립니다.</div>':''}
+      ${nn?`<div class="meta">취소된 일정 ${nn}건을 다시 잡는 신청으로 처리됩니다.</div>`:''}
+      ${b.note?`<div class="meta">“${esc(b.note)}”</div>`:''}
+      <div class="row" style="margin-top:6px"><button class="btn sm" data-ok="${G.g}">${n>1?n+'건 모두 ':''}확정하고 문자 보내기</button><button class="btn sm ghost" style="margin-top:0" data-no="${G.g}">거절</button></div></div>`}).join('');
+    p.querySelectorAll('[data-ok]').forEach(x=>x.onclick=()=>confirmG(x.dataset.ok,x));
+    p.querySelectorAll('[data-no]').forEach(x=>x.onclick=()=>rejectG(x.dataset.no));
+  }
+  if(tab==='sch'){
+    const items=[];
+    D.events.forEach(e=>items.push({k:e.date,s:e.slot,html:`<span class="fam">가족 캘린더 · ${esc(e.title)}</span>`}));
+    D.bookings.filter(b=>active(b)&&b.date>=today).forEach(b=>{const c=cust(b.cid)||{name:'?'};items.push({k:b.date,s:b.slot,html:`<b>컨설팅 ${esc(c.name)}${b.status==='confirmed'?' '+b.round+'회차':''}</b> <span class="badge ${b.status==='confirmed'?'b-ok':'b-wait'}">${b.status==='confirmed'?'확정':'대기'}</span>`})});
+    const so={am:0,pm:1,all:-1};items.sort((a,b)=>a.k.localeCompare(b.k)||so[a.s]-so[b.s]);
+    p.innerHTML=`<p class="muted" style="margin-top:0">앞으로 5주 동안 예약 시간대에 걸친 가족 캘린더 일정과 컨설팅 예약입니다.</p>
+      <ul class="sched">${items.map(it=>`<li><span class="d">${fmtShort(it.k)}<br><span class="muted">${it.s==='all'?'종일':SLOTS[it.s].short}</span></span><div>${it.html}</div></li>`).join('')||'<li>일정이 없습니다.</li>'}</ul>`;
+  }
+  if(tab==='cus'){
+    if(!D.customers.length){p.innerHTML='<div class="card muted">아직 고객이 없습니다.</div>';return}
+    const list=D.customers.slice().sort((a,b)=>{const na=D.bookings.some(x=>x.cid===a.id&&active(x)),nb=D.bookings.some(x=>x.cid===b.id&&active(x));return nb-na||a.name.localeCompare(b.name,'ko')});
+    p.innerHTML=list.map(c=>{const d=doneCount(c.id);const nx=D.bookings.filter(b=>b.cid===c.id&&active(b)&&b.date>=today).sort(order)[0];
+      return `<button class="cust" data-c="${c.id}"><div class="top"><span class="nm">${esc(c.name)} <span class="muted">${esc(c.biz||'')}</span></span><b style="font-variant-numeric:tabular-nums">${d} / ${c.total}회</b></div>
+      <div class="bar"><i style="width:${Math.min(100,d/c.total*100)}%"></i></div>
+      <div class="muted">${nx?'다음: '+fmtShort(nx.date)+' '+SLOTS[nx.slot].short+(nx.status==='pending'?' (대기)':''):'다음 예약 없음'}${d>=c.total?' · 회차 모두 완료':(c.total-d<=1?' · 남은 회차 '+(c.total-d)+'회':'')}</div>${needList(c.id).length?`<div><span class="badge b-no">다시 잡을 일정 ${needList(c.id).length}건</span></div>`:''}</button>`}).join('');
+    p.querySelectorAll('[data-c]').forEach(x=>x.onclick=()=>openCust(x.dataset.c));
+  }
+}
+// head: 첫 문장, up: 앞으로의 확정 일정(회차 포함), newIds: 이번에 새로 잡힌 일정
+function smsText(c,head,up,newIds){
+  const mark=newIds&&newIds.length&&up.some(b=>!newIds.includes(b.id));
+  const lines=up.length?up.map(b=>`· ${fmt(b.date)} ${SLOTS[b.slot].label} — ${b.round}회차${mark&&newIds.includes(b.id)?' (새 일정)':''}`).join('\n'):'· 남은 확정 일정이 없습니다.';
+  return `[원포인트업] ${c.name} 대표님, ${head}\n\n[앞으로의 일정 · 총 ${c.total}회 과정]\n${lines}\n\n일정 확인: ${myLink(c.id)}\n변경이 필요하시면 이 번호로 문자 주세요.`;
+}
+function smsSheet(title,sub,c,text,after){
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet">
+    <h3>${esc(title)}</h3>
+    ${sub?`<p class="muted" style="margin:0">${esc(sub)}</p>`:''}
+    <div class="msg">${esc(text)}</div>
+    <a class="btn" href="${smsHref(c.phone,text)}">문자 보내기 (${esc(c.phone)})</a>
+    <button class="btn ghost" id="cp">문자 내용 복사</button>
+    <button class="btn ghost" id="cl">닫기</button>
+  </div></div>`;
+  const close=()=>{closeSheet();if(after)after()};
+  document.getElementById('cp').onclick=()=>copy(text);
+  document.getElementById('cl').onclick=close;
+  document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
+}
+async function confirmG(g,btn){
+  try{
+    const r=await run(()=>api('admin_confirm',{key:KEY,group:g}),btn);
+    smsSheet('확정했습니다',`가족 캘린더에 ${r.newIds.length}건을 등록했습니다. 회차는 날짜 순서대로 매겨집니다.`,r.customer,smsText(r.customer,'컨설팅 예약이 확정되었습니다.',r.upcoming,r.newIds),()=>load(true));
+  }catch(e){load(true)}
+}
+function rejectG(g){
+  const list=D.bookings.filter(b=>(b.group||b.id)===g&&b.status==='pending');const c=cust(list[0].cid);
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet">
+    <h3>${esc(c.name)}님 신청을 거절할까요?</h3>
+    <p class="muted">${list.map(x=>fmt(x.date)+' '+SLOTS[x.slot].tag).join(', ')} 칸이 다시 열립니다. 고객에게는 따로 연락해 주세요.</p>
+    <button class="btn" id="y" style="background:var(--danger);color:#fff">거절하기</button>
+    <button class="btn ghost" id="n">돌아가기</button></div></div>`;
+  document.getElementById('y').onclick=async e=>{try{await run(()=>api('admin_reject',{key:KEY,group:g}),e.target,'거절했습니다. 칸이 다시 열렸습니다');closeSheet();load(true)}catch(x){}};
+  document.getElementById('n').onclick=closeSheet;
+}
+function openCust(cid){
+  const c=cust(cid);
+  const list=D.bookings.filter(b=>b.cid===cid&&b.status!=='pending').sort(order).reverse();
+  const up=D.bookings.filter(b=>b.cid===cid&&b.status==='confirmed'&&b.date>=D.today).sort(order);
+  const lab={done:['완료','b-done'],confirmed:['확정','b-ok'],noshow:['불참','b-no'],canceled:['취소','b-no']};
+  const d=doneCount(cid);
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet">
+    <h3>${esc(c.name)}</h3>
+    <div class="muted"><a class="tel" style="font-size:16px" href="tel:${c.phone.replace(/-/g,'')}">${esc(c.phone)} <span>전화</span></a></div>
+    <div class="field" style="margin-top:12px"><label for="biz">업체명</label><input id="biz" value="${esc(c.biz||'')}" placeholder="예) 민정플라워"></div>
+    <div class="card" style="margin:4px 0 14px"><div class="row" style="justify-content:space-between;align-items:center">
+      <b>계약 회차</b><div class="stepper"><button id="mi" aria-label="회차 줄이기">−</button><b id="tt" style="font-size:20px;min-width:44px;text-align:center">${c.total}회</b><button id="pl" aria-label="회차 늘리기">+</button></div></div>
+      <div class="muted" style="margin-top:6px">${d}회 완료 · 남은 회차 ${Math.max(0,c.total-d)}회</div></div>
+    <b>고객 전용 페이지</b><div class="linkbox" style="margin:6px 0 4px">${esc(myLink(c.id))}</div>
+    <div class="row"><button class="btn sm ghost" style="margin-top:0" id="cpl">링크 복사</button>${up.length?'<button class="btn sm ghost" style="margin-top:0" id="resend">일정 문자 다시 보내기</button>':''}</div>
+    ${needList(cid).length?`<h2 style="margin-top:20px">다시 잡을 일정</h2><div class="card" style="display:grid;gap:12px">${needList(cid).map(b=>`<div style="display:grid;gap:6px"><b>${fmtShort(b.date)} ${SLOTS[b.slot].short} · ${b.status==='noshow'?'불참':'취소'}</b><div class="row"><button class="btn sm" data-rb="${b.id}">새 날짜 잡기</button><button class="btn sm ghost" style="margin-top:0" data-ds="${b.id}">다시 안 잡기</button></div></div>`).join('')}<p class="muted" style="margin:0">고객이 예약 화면에서 직접 신청해 확정하면 자동으로 정리됩니다. 회차는 날짜 순서대로 다시 매겨집니다.</p></div>`:''}
+    <h2 style="margin-top:20px">회차 기록</h2>
+    ${list.map(b=>`<div class="sess"><div class="h"><b>${fmtShort(b.date)} ${SLOTS[b.slot].short}${b.round?' · '+b.round+'회차':''}</b><span class="badge ${lab[b.status][1]}">${lab[b.status][0]}${b.rebook?' · 다시 잡기':''}</span></div>
+      ${b.status!=='canceled'?`<input class="memo-in" id="m-${b.id}" data-m="${b.id}" value="${esc(b.memo||'')}" placeholder="메모 (나만 보기)">`:''}
+      ${b.status==='confirmed'?`<div class="row"><button class="btn sm" data-st="done" data-id="${b.id}">완료 처리</button><button class="btn sm ghost" style="margin-top:0" data-st="noshow" data-id="${b.id}">불참</button><button class="btn sm ghost" style="margin-top:0" data-st="canceled" data-id="${b.id}">예약 취소</button></div>`:''}
+      ${b.status==='done'||b.status==='noshow'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-st="confirmed" data-id="${b.id}">되돌리기</button></div>`:''}</div>`).join('')||'<p class="muted">기록이 없습니다.</p>'}
+    <button class="btn ghost" id="cl" style="margin-top:14px">닫기</button></div></div>`;
+  let total=c.total,tTimer=null;
+  const close=()=>{closeSheet();render()};
+  document.getElementById('cl').onclick=close;
+  document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
+  const setTotal=v=>{total=Math.max(1,v);c.total=total;document.getElementById('tt').textContent=total+'회';clearTimeout(tTimer);tTimer=setTimeout(()=>run(()=>api('admin_customer',{key:KEY,id:cid,total}),null,'계약 회차를 저장했습니다').catch(()=>{}),700)};
+  document.getElementById('mi').onclick=()=>setTotal(total-1);
+  document.getElementById('pl').onclick=()=>setTotal(total+1);
+  document.getElementById('biz').onchange=e=>{c.biz=e.target.value.trim();run(()=>api('admin_customer',{key:KEY,id:cid,biz:c.biz}),null,'업체명을 저장했습니다').catch(()=>{})};
+  document.getElementById('cpl').onclick=()=>copy(myLink(c.id));
+  const rs=document.getElementById('resend');
+  if(rs)rs.onclick=()=>smsSheet('일정 문자',null,c,smsText(c,'앞으로의 컨설팅 일정 안내드립니다.',up),()=>openCust(cid));
+  layer.querySelectorAll('[data-m]').forEach(i=>i.onchange=()=>{const b=D.bookings.find(x=>x.id===i.dataset.m);b.memo=i.value;run(()=>api('admin_memo',{key:KEY,id:b.id,memo:b.memo}),null,'메모를 저장했습니다').catch(()=>{})});
+  const msg={done:'완료 처리했습니다',noshow:'불참으로 기록했습니다. 새 날짜를 잡아주세요',confirmed:'되돌렸습니다'};
+  layer.querySelectorAll('[data-rb]').forEach(x=>x.onclick=()=>pickNew(cid,x.dataset.rb));
+  layer.querySelectorAll('[data-ds]').forEach(x=>x.onclick=async()=>{
+    if(!x.dataset.sure){x.dataset.sure=1;x.textContent='한 번 더 누르면 정리';return}
+    try{await run(()=>api('admin_dismiss',{key:KEY,id:x.dataset.ds}),x,'다시 잡지 않는 일정으로 정리했습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}
+  });
+  layer.querySelectorAll('[data-st]').forEach(x=>x.onclick=async()=>{
+    const s=x.dataset.st,bk=D.bookings.find(y=>y.id===x.dataset.id);
+    if(s==='canceled'&&!x.dataset.sure){x.dataset.sure=1;x.textContent='한 번 더 누르면 취소';return}
+    try{
+      const r=await run(()=>api('admin_status',{key:KEY,id:x.dataset.id,status:s}),x,msg[s]);
+      D=await api('admin_list',{key:KEY});
+      if(s==='canceled')smsSheet('취소했습니다','캘린더에서 지웠고, 뒤 일정 회차는 날짜 순서대로 다시 매겼습니다. 이 일정은 "다시 잡을 일정"에 남아 있습니다.',r.customer,smsText(r.customer,`${fmt(bk.date)} ${SLOTS[bk.slot].tag} 일정이 취소되었습니다. 새 날짜는 편하실 때 예약 화면에서 골라주시거나 연락 주세요.`,r.upcoming),()=>openCust(cid));
+      else openCust(cid);
+    }catch(e){}
+  });
+}
+async function pickNew(cid,bid){
+  const c=cust(cid),ob=D.bookings.find(x=>x.id===bid);
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>${esc(c.name)} 새 날짜 잡기</h3><p class="muted" style="margin:0 0 8px">${fmt(ob.date)} ${SLOTS[ob.slot].tag} 일정 대신 잡을 날짜를 골라주세요.</p><div id="pk">${loading('빈 시간을 불러오고 있습니다')}</div><button class="btn ghost" id="cl">닫기</button></div></div>`;
+  const back=()=>openCust(cid);
+  document.getElementById('cl').onclick=back;
+  document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')back()};
+  let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('pk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
+  const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm));
+  const pk=document.getElementById('pk');
+  pk.innerHTML=ks.length?`<p class="muted">비어 있는 시간만 보입니다. 누르면 바로 확정됩니다.</p><div class="days">${ks.map(k=>`<div class="day"><div class="dayhead"><b>${fmt(k)}</b></div><div class="slots">${['am','pm'].map(s=>S.days[k][s]?`<button class="slot open" data-k="${k}" data-s="${s}"><span class="t">${SLOTS[s].label}</span></button>`:`<div class="slot off"><span class="t">${SLOTS[s].label}</span><span class="s">마감</span></div>`).join('')}</div></div>`).join('')}</div>`:'<div class="card muted">비어 있는 시간이 없습니다.</div>';
+  pk.querySelectorAll('.slot.open').forEach(b=>b.onclick=async()=>{
+    if(!b.dataset.sure){pk.querySelectorAll('.slot.open').forEach(x=>{delete x.dataset.sure;x.style.background=''});b.dataset.sure=1;b.style.background='var(--heart-soft)';b.querySelector('.t').insertAdjacentHTML('afterend','<span class="s" style="color:var(--heart);font-weight:700">한 번 더 누르면 확정</span>');return}
+    try{
+      const r=await run(()=>api('admin_rebook',{key:KEY,cid,bid,date:b.dataset.k,slot:b.dataset.s}),null);
+      D=await api('admin_list',{key:KEY});
+      smsSheet('새 날짜를 잡았습니다','가족 캘린더에 등록했고, 회차는 날짜 순서대로 다시 매겼습니다.',r.customer,smsText(r.customer,'취소된 일정을 새 날짜로 다시 잡았습니다.',r.upcoming,r.newIds),()=>openCust(cid));
+    }catch(e){}
+  });
+}
+if(KEY)load();else login();
+})();
+</script>
+</body>
+</html>
