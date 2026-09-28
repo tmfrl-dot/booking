@@ -20,7 +20,9 @@
 <script src="common.js"></script>
 <script>
 (function(){
-const {C,SLOTS,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,store}=U;
+const {C,SLOTS,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,copy,store}=U;
+const payBox=()=>C.PAY?`<button type="button" class="paybox" data-acct="1"><span class="pl">입금 계좌 · 누르면 복사돼요</span><b>${esc(C.PAY.bank)} ${esc(C.PAY.num)}</b><span>예금주 ${esc(C.PAY.holder)}</span><em>계좌번호 복사</em></button>`:'';
+document.addEventListener('click',e=>{const b=e.target.closest('[data-acct]');if(!b)return;copy(C.PAY.bank+' '+C.PAY.num.replace(/-/g,''));const t=b.querySelector('em');if(t)t.textContent='복사했어요 · 은행 앱에 붙여넣기 하세요'});
 const app=document.getElementById('app'),layer=document.getElementById('layer');
 const closeSheet=()=>{layer.innerHTML=''};
 const token=new URLSearchParams(location.search).get('c');
@@ -194,7 +196,7 @@ function openForm(k,s){
         <svg class="bigheart" viewBox="0 0 24 24" aria-hidden="true">${HEART}</svg>
         <h3>${esc(name)}님, 신청되었습니다</h3>
         <p class="lead">${r.booked.map(x=>fmt(x.date)+' '+SLOTS[x.slot].label).join('<br>')}<br><br>확정되면 <b>문자로 알려드립니다.</b></p>
-        ${r.payWait?`<p class="paynote" style="text-align:left">새 세션 신청으로 접수되었습니다. <b>입금이 확인되면 일정이 확정</b>됩니다. 먼저 입금하신 분이 계시면 같은 시간이 먼저 마감될 수 있어요.${C.PAY_INFO?'<br>'+esc(C.PAY_INFO):''}</p>`:''}
+        ${r.payWait?`<p class="paynote" style="text-align:left">신청이 접수되었습니다. <b>입금이 확인되면 일정이 확정</b>됩니다. 먼저 입금하신 분이 계시면 같은 시간이 먼저 마감될 수 있어요.</p>${payBox()}`:''}
         ${r.skipped.length?`<p class="muted">${r.skipped.map(x=>fmt(x.date)+' '+SLOTS[x.slot].tag).join(', ')}은 방금 마감되어 빠졌습니다.</p>`:''}
         <button class="btn" id="ok">확인</button></div></div>`;
       document.getElementById('ok').onclick=()=>{closeSheet();pickDay=null;loadSlots()};
@@ -261,7 +263,7 @@ function renderMy(r){
     if(more.length)h+=`<div class="card" style="margin-top:8px"><b>이후 예약</b><ul class="hist">${more.map(b=>`<li><span>${fmtShort(b.date)} ${SLOTS[b.slot].short}</span><span class="badge ${b.status==='confirmed'?'b-ok':'b-wait'}">${b.status==='confirmed'?(b.sno>1?b.sno+'세션 ':'')+b.round+'회차 확정':'확인 중'}</span></li>`).join('')}</ul></div>`;
   } else h+=`<div class="card"><b>다음 예약이 없습니다.</b><p class="muted" style="margin:4px 0 8px">편한 시간을 골라 신청해 주세요.</p><a class="btn sm" href="./">예약하러 가기</a></div>`;
   if(r.need)h+=`<div class="card" style="margin-top:8px;border-color:var(--heart)"><b>취소된 일정 ${r.need}건의 날짜를 다시 잡아야 해요</b><p class="muted" style="margin:4px 0 8px">편한 날짜를 골라 신청해 주세요. 회차는 날짜 순서대로 매겨집니다.</p><a class="btn sm" href="./">날짜 고르기</a></div>`;
-  if(r.sstatus==='입금대기')h+=`<div class="card" style="margin-top:8px"><p class="paynote" style="margin:0">새 세션 신청이 접수되었습니다. <b>입금이 확인되면 일정이 확정</b>됩니다. 먼저 입금하신 분이 계시면 같은 시간이 먼저 마감될 수 있어요.${C.PAY_INFO?'<br>'+esc(C.PAY_INFO):''}</p></div>`;
+  if(r.sstatus==='입금대기')h+=`<div class="card" style="margin-top:8px"><p class="paynote" style="margin:0">신청이 접수되었습니다. <b>입금이 확인되면 일정이 확정</b>됩니다. 먼저 입금하신 분이 계시면 같은 시간이 먼저 마감될 수 있어요.</p>${payBox()}</div>`;
   h+=`<h2>진행 회차</h2><div class="card"><div><span class="muted">${r.sno}번째 세션</span><br><b style="font-size:20px">${r.done}회 완료</b> <span class="muted">/ 총 ${r.total}회</span></div><div class="rounds">${dots}</div></div>`;
   const past=r.bookings.filter(b=>b.status==='done'||b.status==='noshow');
   h+=`<h2>지난 기록</h2><div class="card"><ul class="hist">`;

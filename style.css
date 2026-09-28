@@ -208,3 +208,8 @@ h2{font-weight:800;font-size:21px;letter-spacing:-0.02em;margin:28px 0 10px}
 .cell .n{white-space:nowrap}
 .paynote{font-size:14px;color:var(--sub);background:var(--bg);border-radius:10px;padding:10px 12px;margin:0 0 12px;line-height:1.5}
 .sesrow.old{opacity:.75;border-top:1px solid var(--line);padding-top:10px}
+.paybox{display:grid;gap:2px;width:100%;text-align:left;border:2px dashed var(--heart);background:var(--heart-soft);color:var(--ink);border-radius:12px;padding:12px 14px;margin:0 0 12px}
+.paybox .pl{font-size:13px;color:var(--sub);font-weight:600}
+.paybox b{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
+.paybox span{font-size:14px}
+.paybox em{font-style:normal;font-size:14px;font-weight:700;color:var(--heart);margin-top:4px}

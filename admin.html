@@ -97,7 +97,7 @@ function render(){
       <div>${G.list.map(x=>`<b>${fmt(x.date)} ${SLOTS[x.slot].label}</b>`).join('<br>')}</div>
       <div class="meta">${esc(c.phone)} · ${pr.join(', ')}회차로 확정 예정</div>
       ${wait?'<div class="meta">새 세션 신청입니다. 입금을 확인한 뒤 확정해 주세요.</div>':''}
-      ${clash.length?`<div class="meta" style="color:var(--danger)">${clash.map(x=>fmtShort(x.date)+' '+SLOTS[x.slot].tag).join(', ')}은 이미 다른 분이 확정했습니다.</div>`:''}
+      ${clash.length?`<div class="meta" style="color:var(--danger)">${clash.map(x=>fmtShort(x.date)+' '+SLOTS[x.slot].tag).join(', ')}은 마감되었습니다.</div>`:''}
       ${shift?'<div class="meta">이미 잡힌 뒤 일정은 회차가 하나씩 밀립니다.</div>':''}
       ${nn?`<div class="meta">취소된 일정 ${nn}건을 다시 잡는 신청으로 처리됩니다.</div>`:''}
       ${b.note?`<div class="meta">“${esc(b.note)}”</div>`:''}
@@ -128,7 +128,7 @@ function render(){
 function smsText(c,head,up,newIds){
   const mark=newIds&&newIds.length&&up.some(b=>!newIds.includes(b.id));
   const lines=up.length?up.map(b=>`· ${fmt(b.date)} ${SLOTS[b.slot].label} — ${b.sno>1?b.sno+'세션 ':''}${b.round}회차${mark&&newIds.includes(b.id)?' (새 일정)':''}`).join('\n'):'· 남은 확정 일정이 없습니다.';
-  return `[원포인트업] ${c.name} 대표님, ${head}\n\n[앞으로의 일정${c.sno>1?' · '+c.sno+'번째 세션':''} · 총 ${c.total}회 과정]\n${lines}\n\n일정 확인: ${myLink(c.id)}\n변경이 필요하시면 이 번호로 문자 주세요.`;
+  return `[원포인트업]\n안녕하세요, ${c.name} 대표님.\n${head}\n\n[앞으로의 일정${c.sno>1?' · '+c.sno+'번째 세션':''} · 총 ${c.total}회 과정]\n${lines}\n\n일정은 아래 링크에서 언제든 확인하실 수 있습니다.\n${myLink(c.id)}\n\n일정 변경이 필요하시면 이 번호로 편하게 연락 주세요.\n감사합니다.\n원포인트업 드림`;
 }
 function smsSheet(title,sub,c,text,after){
   layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet">
@@ -147,7 +147,7 @@ function smsSheet(title,sub,c,text,after){
 async function confirmG(g,btn){
   try{
     const r=await run(()=>api('admin_confirm',{key:KEY,group:g}),btn);
-    smsSheet('확정했습니다',`가족 캘린더에 ${r.newIds.length}건을 등록했습니다.${r.clash&&r.clash.length?' '+r.clash.map(x=>fmtShort(x.date)+' '+SLOTS[x.slot].tag).join(', ')+'은 이미 찬 시간이라 빼고 확정했습니다.':''}`,r.customer,smsText(r.customer,'컨설팅 예약이 확정되었습니다.',r.upcoming,r.newIds),()=>load(true));
+    smsSheet('확정했습니다',`가족 캘린더에 ${r.newIds.length}건을 등록했습니다.${r.clash&&r.clash.length?' '+r.clash.map(x=>fmtShort(x.date)+' '+SLOTS[x.slot].tag).join(', ')+'은 마감되어 빼고 확정했습니다.':''}`,r.customer,smsText(r.customer,'컨설팅 예약이 확정되어 안내드립니다.',r.upcoming,r.newIds),()=>load(true));
   }catch(e){load(true)}
 }
 function rejectG(g){
@@ -200,7 +200,7 @@ function openCust(cid){
   document.getElementById('biz').onchange=e=>{c.biz=e.target.value.trim();run(()=>api('admin_customer',{key:KEY,id:cid,biz:c.biz}),null,'업체명을 저장했습니다').catch(()=>{})};
   document.getElementById('cpl').onclick=()=>copy(myLink(c.id));
   const rs=document.getElementById('resend');
-  if(rs)rs.onclick=()=>smsSheet('일정 문자',null,c,smsText(c,'앞으로의 컨설팅 일정 안내드립니다.',up),()=>openCust(cid));
+  if(rs)rs.onclick=()=>smsSheet('일정 문자',null,c,smsText(c,'앞으로의 컨설팅 일정을 안내드립니다.',up),()=>openCust(cid));
   layer.querySelectorAll('[data-m]').forEach(i=>i.onchange=()=>{const b=D.bookings.find(x=>x.id===i.dataset.m);b.memo=i.value;run(()=>api('admin_memo',{key:KEY,id:b.id,memo:b.memo}),null,'메모를 저장했습니다').catch(()=>{})});
   const msg={done:'완료 처리했습니다',noshow:'불참으로 기록했습니다. 새 날짜를 잡아주세요',confirmed:'되돌렸습니다'};
   layer.querySelectorAll('[data-rb]').forEach(x=>x.onclick=()=>pickNew(cid,x.dataset.rb));
@@ -214,7 +214,7 @@ function openCust(cid){
     try{
       const r=await run(()=>api('admin_status',{key:KEY,id:x.dataset.id,status:s}),x,msg[s]);
       D=await api('admin_list',{key:KEY});
-      if(s==='canceled')smsSheet('취소했습니다','캘린더에서 지웠고, 뒤 일정 회차는 날짜 순서대로 다시 매겼습니다. 이 일정은 "다시 잡을 일정"에 남아 있습니다.',r.customer,smsText(r.customer,`${fmt(bk.date)} ${SLOTS[bk.slot].tag} 일정이 취소되었습니다. 새 날짜는 편하실 때 예약 화면에서 골라주시거나 연락 주세요.`,r.upcoming),()=>openCust(cid));
+      if(s==='canceled')smsSheet('취소했습니다','캘린더에서 지웠고, 뒤 일정 회차는 날짜 순서대로 다시 매겼습니다. 이 일정은 "다시 잡을 일정"에 남아 있습니다.',r.customer,smsText(r.customer,`${fmt(bk.date)} ${SLOTS[bk.slot].tag} 일정이 취소되었음을 안내드립니다. 새 날짜는 편하실 때 예약 화면에서 골라주시거나 연락 주시면 다시 잡아드리겠습니다.`,r.upcoming),()=>openCust(cid));
       else openCust(cid);
     }catch(e){}
   });
@@ -234,7 +234,7 @@ async function pickNew(cid,bid){
     try{
       const r=await run(()=>api('admin_rebook',{key:KEY,cid,bid,date:b.dataset.k,slot:b.dataset.s}),null);
       D=await api('admin_list',{key:KEY});
-      smsSheet('새 날짜를 잡았습니다','가족 캘린더에 등록했고, 회차는 날짜 순서대로 다시 매겼습니다.',r.customer,smsText(r.customer,'취소된 일정을 새 날짜로 다시 잡았습니다.',r.upcoming,r.newIds),()=>openCust(cid));
+      smsSheet('새 날짜를 잡았습니다','가족 캘린더에 등록했고, 회차는 날짜 순서대로 다시 매겼습니다.',r.customer,smsText(r.customer,'취소되었던 일정을 새 날짜로 다시 잡아 안내드립니다.',r.upcoming,r.newIds),()=>openCust(cid));
     }catch(e){}
   });
 }
