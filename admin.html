@@ -32,7 +32,7 @@ const order=(a,b)=>(a.date+a.slot).localeCompare(b.date+b.slot);
 const needList=cid=>D.bookings.filter(b=>b.cid===cid&&b.rebook).sort(order);
 const sessOf=id=>(D.sessions||[]).find(x=>x.id===id);
 const sessList=cid=>(D.sessions||[]).filter(x=>x.cid===cid).sort((a,b)=>a.no-b.no);
-const curSess=cid=>{const l=sessList(cid);return l[l.length-1]||{no:1,total:4,done:0,used:0,status:'진행'}};
+const curSess=cid=>{const l=sessList(cid);return l.find(x=>x.done<x.total)||l[l.length-1]||{no:1,total:4,done:0,used:0,status:'진행'}};
 const doneCount=cid=>curSess(cid).done;
 const rlabel=b=>{const x=sessOf(b.session);return (x&&x.no>1?x.no+'세션 ':'')+b.round+'회차'};
 
@@ -182,6 +182,14 @@ function openCust(cid){
         <div class="stepper"><button data-sm="${x.id}" aria-label="회차 줄이기">−</button><b data-st2="${x.id}" style="font-size:18px;min-width:40px;text-align:center">${x.total}회</b><button data-sp="${x.id}" aria-label="회차 늘리기">+</button></div></div>
         ${x.status==='입금대기'?`<button class="btn sm" style="margin-top:8px" data-paid="${x.id}">입금 확인</button>`:''}</div>`).join('')||'<p class="muted" style="margin:0">아직 세션이 없습니다. 첫 신청을 확정하면 1번째 세션이 생깁니다.</p>'}
       <button class="btn sm ghost" style="margin-top:0" id="snew">+ 새 세션 열기 (입금 확인된 연장)</button>
+      <button class="btn sm ghost" style="margin-top:0" id="pastb">+ 앱 밖에서 진행한 회차 기록</button>
+      <div id="pastf" hidden style="display:grid;gap:8px">
+        <p class="muted" style="margin:0">이미 만나서 진행한 회차를 완료로 남깁니다. 캘린더에는 넣지 않고, 뒤 일정 회차가 날짜 순서대로 다시 매겨집니다.</p>
+        <div class="row"><input type="date" id="pd" value="${D.today}" max="${D.today}" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--paper);color:var(--ink)">
+        <select id="ps" style="padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--paper);color:var(--ink)"><option value="am">오전</option><option value="pm">오후</option></select></div>
+        <button class="btn sm" style="margin-top:0" id="psave">완료로 기록하기</button>
+      </div>
+      <p class="muted" style="margin:0">예약은 날짜 순서대로 1번째 세션부터 회차 수만큼 자동으로 채워집니다.</p>
     </div>
     <b>고객 전용 페이지</b><div class="linkbox" style="margin:6px 0 4px">${esc(myLink(c.id))}</div>
     <div class="row"><button class="btn sm ghost" style="margin-top:0" id="cpl">링크 복사</button>${up.length?'<button class="btn sm ghost" style="margin-top:0" id="resend">일정 문자 다시 보내기</button>':''}</div>
@@ -190,18 +198,27 @@ function openCust(cid){
     ${list.map(b=>`<div class="sess"><div class="h"><b>${fmtShort(b.date)} ${SLOTS[b.slot].short}${b.round?' · '+rlabel(b):''}</b><span class="badge ${lab[b.status][1]}">${lab[b.status][0]}${b.rebook?' · 다시 잡기':''}</span></div>
       ${b.status!=='canceled'?`<input class="memo-in" id="m-${b.id}" data-m="${b.id}" value="${esc(b.memo||'')}" placeholder="메모 (나만 보기)">`:''}
       ${b.status==='confirmed'?`<div class="row"><button class="btn sm" data-st="done" data-id="${b.id}">완료 처리</button><button class="btn sm ghost" style="margin-top:0" data-st="noshow" data-id="${b.id}">불참</button><button class="btn sm ghost" style="margin-top:0" data-st="canceled" data-id="${b.id}">예약 취소</button></div>`:''}
-      ${b.status==='done'||b.status==='noshow'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-st="confirmed" data-id="${b.id}">되돌리기</button></div>`:''}</div>`).join('')||'<p class="muted">기록이 없습니다.</p>'}
+      ${b.status==='done'||b.status==='noshow'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-st="confirmed" data-id="${b.id}">되돌리기</button></div>`:''}
+      ${b.status==='canceled'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-del="${b.id}">목록에서 지우기</button></div>`:''}</div>`).join('')||'<p class="muted">기록이 없습니다.</p>'}
     <button class="btn ghost" id="cl" style="margin-top:14px">닫기</button></div></div>`;
   const tTimer={};
   const close=()=>{closeSheet();render()};
   document.getElementById('cl').onclick=close;
   document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
-  const setS=(sid,dv)=>{const x=sessOf(sid);const nt=Math.max(1,Math.min(30,x.total+dv));if(nt<x.used){toast(`예약이 ${x.used}건 잡혀 있어서 ${x.used}회보다 줄일 수 없어요`);return}x.total=nt;layer.querySelector(`[data-st2="${sid}"]`).textContent=x.total+'회';clearTimeout(tTimer[sid]);tTimer[sid]=setTimeout(()=>run(()=>api('admin_sess_total',{key:KEY,id:sid,total:x.total}),null,x.no+'번째 세션을 '+x.total+'회로 저장했습니다').catch(()=>{}),700)};
+  const setS=(sid,dv)=>{const x=sessOf(sid);const nt=Math.max(1,Math.min(30,x.total+dv));const isLast=!sessList(cid).some(y=>y.no>x.no);if(nt<x.used&&isLast){toast(`예약이 ${x.used}건 잡혀 있어서 ${x.used}회보다 줄일 수 없어요`);return}x.total=nt;layer.querySelector(`[data-st2="${sid}"]`).textContent=x.total+'회';clearTimeout(tTimer[sid]);tTimer[sid]=setTimeout(async()=>{try{await run(()=>api('admin_sess_total',{key:KEY,id:sid,total:x.total}),null,x.no+'번째 세션을 '+x.total+'회로 저장했습니다');D=await api('admin_list',{key:KEY});if(layer.innerHTML)openCust(cid)}catch(e){}},700)};
   layer.querySelectorAll('[data-sm]').forEach(b=>b.onclick=()=>setS(b.dataset.sm,-1));
   layer.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>setS(b.dataset.sp,1));
   layer.querySelectorAll('[data-paid]').forEach(b=>b.onclick=async()=>{try{await run(()=>api('admin_sess_paid',{key:KEY,id:b.dataset.paid}),b,'입금 확인으로 바꿨습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}});
   document.getElementById('snew').onclick=async e=>{const b=e.target;if(!b.dataset.sure){b.dataset.sure=1;b.textContent='한 번 더 누르면 4회 세션을 엽니다';return}
     try{await run(()=>api('admin_sess_new',{key:KEY,cid,total:4}),b,'새 세션을 열었습니다. 회차 수는 −/+로 조정하세요');D=await api('admin_list',{key:KEY});openCust(cid)}catch(x){}};
+  document.getElementById('pastb').onclick=()=>{const f=document.getElementById('pastf');f.hidden=!f.hidden};
+  document.getElementById('psave').onclick=async e=>{const date=document.getElementById('pd').value,slot=document.getElementById('ps').value;
+    if(!date){toast('날짜를 골라주세요');return}
+    try{await run(()=>api('admin_add_done',{key:KEY,cid,date,slot}),e.target,fmtShort(date)+' 회차를 완료로 기록했습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(x){}};
+  layer.querySelectorAll('[data-del]').forEach(x=>x.onclick=async()=>{
+    if(!x.dataset.sure){x.dataset.sure=1;x.textContent='한 번 더 누르면 지웁니다';return}
+    try{await run(()=>api('admin_delete',{key:KEY,id:x.dataset.del}),x,'목록에서 지웠습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}
+  });
   document.getElementById('biz').onchange=e=>{c.biz=e.target.value.trim();run(()=>api('admin_customer',{key:KEY,id:cid,biz:c.biz}),null,'업체명을 저장했습니다').catch(()=>{})};
   document.getElementById('cpl').onclick=()=>copy(myLink(c.id));
   const rs=document.getElementById('resend');
