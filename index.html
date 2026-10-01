@@ -273,10 +273,10 @@ function renderMy(r){
   <p class="lead">예약 일정과 진행 회차를 언제든 여기서 확인하실 수 있어요.</p>`;
   if(next){
     h+=`<div class="card next"><span class="badge ${st(next)[0]}">${st(next)[1]}</span>
-      <div class="when">${fmt(next.date)}<br>${SLOTS[next.slot].label}</div>
+      <div class="when">${fmt(next.date)}<br>${next.remote?'따로 진행 (시간은 따로 안내)':SLOTS[next.slot].label}</div>
       ${nextRound?`<div class="muted">${next.sno>1?next.sno+'세션 ':''}${nextRound}회차 · 최대 2시간</div>`:''}${dl(next)}</div>`;
     const more=up.slice(1);
-    if(more.length)h+=`<div class="card" style="margin-top:8px"><b>이후 예약</b><ul class="hist">${more.map(b=>`<li><span>${fmtShort(b.date)} ${SLOTS[b.slot].short}</span><span class="badge ${st(b)[0]}">${b.status==='confirmed'?(b.sno>1?b.sno+'세션 ':'')+b.round+'회차 확정':st(b)[1]+(b.deadline?' · '+fmtShort(b.deadline)+'까지 입금':'')}</span></li>`).join('')}</ul></div>`;
+    if(more.length)h+=`<div class="card" style="margin-top:8px"><b>이후 예약</b><ul class="hist">${more.map(b=>`<li><span>${fmtShort(b.date)} ${b.remote?'따로 진행':SLOTS[b.slot].short}</span><span class="badge ${st(b)[0]}">${b.status==='confirmed'?(b.sno>1?b.sno+'세션 ':'')+b.round+'회차 확정':st(b)[1]+(b.deadline?' · '+fmtShort(b.deadline)+'까지 입금':'')}</span></li>`).join('')}</ul></div>`;
   } else h+=`<div class="card"><b>다음 예약이 없습니다.</b><p class="muted" style="margin:4px 0 8px">편한 시간을 골라 신청해 주세요.</p><a class="btn sm" href="./">예약하러 가기</a></div>`;
   if(r.need)h+=`<div class="card" style="margin-top:8px;border-color:var(--heart)"><b>취소된 일정 ${r.need}건의 날짜를 다시 잡아야 해요</b><p class="muted" style="margin:4px 0 8px">편한 날짜를 골라 신청해 주세요. 회차는 날짜 순서대로 매겨집니다.</p><a class="btn sm" href="./">날짜 고르기</a></div>`;
   if(r.sstatus==='입금대기')h+=`<div class="card" style="margin-top:8px"><p class="paynote" style="margin:0">입금 확인 전이라 <b>가예약</b> 상태입니다. 회차 이틀 전까지 입금이 확인되면 확정되고, 확인되지 않으면 그 시간은 다른 분께 넘어갈 수 있어요.</p>${payBox()}</div>`;
