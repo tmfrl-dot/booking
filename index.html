@@ -284,7 +284,7 @@ function renderMy(r){
   const past=r.bookings.filter(b=>b.status==='done'||b.status==='noshow');
   h+=`<h2>지난 기록</h2><div class="card"><ul class="hist">`;
   if(!past.length)h+='<li class="muted">아직 기록이 없습니다.</li>';
-  past.forEach(b=>{h+=`<li><span>${fmtShort(b.date)} ${SLOTS[b.slot].short}</span><span class="badge ${b.status==='done'?'b-done':'b-no'}">${(b.sno>1?b.sno+'세션 ':'')+(b.status==='done'?b.round+'회차 완료':(b.round?b.round+'회차 ':'')+'불참')}</span></li>`});
+  past.forEach(b=>{h+=`<li><span>${fmtShort(b.date)} ${b.remote?'따로 진행':SLOTS[b.slot].short}</span><span class="badge ${b.status==='done'?'b-done':'b-no'}">${(b.sno>1?b.sno+'세션 ':'')+(b.status==='done'?b.round+'회차 완료':(b.round?b.round+'회차 ':'')+'불참')}</span></li>`});
   h+=`</ul></div>${next?'<p style="margin-top:14px"><a class="btn ghost" href="./">다른 날짜 예약하기</a></p>':''}${foot()}`;
   app.innerHTML=h;
 }
