@@ -20,7 +20,8 @@
 (function(){
 const {C,SLOTS,key,parse,fmt,fmtShort,esc,brand,loading,api,toast,copy,store,syncing}=U;
 const app=document.getElementById('app'),layer=document.getElementById('layer');
-const closeSheet=()=>{layer.innerHTML=''};
+let openCid=null;
+const closeSheet=()=>{layer.innerHTML='';openCid=null};
 let KEY=store.get('adminKey'), D=null, tab='req';
 const BASE=location.href.split('#')[0].split('?')[0].replace(/admin\.html$/,'');
 const myLink=cid=>BASE+'?c='+cid;
@@ -57,7 +58,7 @@ async function load(quiet){
   const cached=!D&&store.get('adminD');
   if(cached&&cached.customers){D=cached;render();syncing(true)}
   else if(!quiet||!D)app.innerHTML=brand('관리 화면 · 컨설팅 폰 전용')+loading();
-  try{const r=await api('admin_list',{key:KEY});D=r;store.set('adminD',r);syncing(false);if(!cached||!layer.innerHTML)render()}
+  try{const r=await api('admin_list',{key:KEY});D=r;store.set('adminD',r);syncing(false);if(!cached||!layer.innerHTML)render();else if(openCid&&document.getElementById('pastb')){render();openCust(openCid)}}
   catch(e){
     syncing(false);
     if(e.auth===false){store.del('adminKey');store.del('adminD');return login(e.message)}
@@ -166,6 +167,7 @@ function rejectG(g){
   document.getElementById('n').onclick=closeSheet;
 }
 function openCust(cid){
+  openCid=cid;
   const c=cust(cid);
   const list=D.bookings.filter(b=>b.cid===cid&&b.status!=='pending').sort(order).reverse();
   const up=D.bookings.filter(b=>b.cid===cid&&b.status==='confirmed'&&b.date>=D.today).sort(order).map(b=>Object.assign({},b,{sno:(sessOf(b.session)||{}).no||1}));
