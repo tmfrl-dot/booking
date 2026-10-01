@@ -94,7 +94,7 @@ function render(){
     if(!groups.length){p.innerHTML='<div class="card muted">새 신청이 없습니다.</div>';return}
     p.innerHTML=groups.map(G=>{const b=G.list[0];const c=cust(b.cid)||{name:'(알 수 없음)',phone:'',total:4};
       const n=G.list.length;
-      const pr=G.list.map(x=>{const held=D.bookings.filter(y=>y.session===x.session&&(y.status==='confirmed'||y.status==='done'));const all=held.concat(G.list.filter(y=>y.session===x.session)).sort(order);const ss=sessOf(x.session);return (ss&&ss.no>1?ss.no+'세션 ':'')+(all.indexOf(x)+1)});
+      const pr=G.list.map(x=>{const held=D.bookings.filter(y=>y.session===x.session&&(y.status==='confirmed'||y.status==='done'));const all=held.concat(G.list.filter(y=>y.session===x.session)).sort(order);const ss=sessOf(x.session);return (ss&&ss.no>1?ss.no+'세션 ':'')+(((ss&&ss.prior)||0)+all.indexOf(x)+1)});
       const held=D.bookings.filter(x=>x.cid===b.cid&&x.status==='confirmed');
       const shift=held.some(x=>G.list.some(y=>y.session===x.session&&order(y,x)<0));const nn=needList(b.cid).length;
       const wait=G.list.some(x=>(sessOf(x.session)||{}).status==='입금대기');
@@ -180,11 +180,13 @@ function openCust(cid){
     <div class="field" style="margin-top:12px"><label for="biz">업체명</label><input id="biz" value="${esc(c.biz||'')}" placeholder="예) 민정플라워"></div>
     <div class="card" style="margin:4px 0 14px;display:grid;gap:12px">
       ${ses.map((x,i)=>`<div class="sesrow ${i?'old':''}"><div class="row" style="justify-content:space-between;align-items:center">
-        <div><b>${x.no}번째 세션</b> <span class="badge ${x.status==='입금대기'?'b-no':(x.done>=x.total?'b-done':'b-ok')}">${x.status==='입금대기'?'입금 확인 전':(x.done>=x.total?'완료':'진행 중')}</span><div class="muted">${x.done}회 완료 · 예약 포함 ${x.used}회 사용</div></div>
+        <div><b>${x.no}번째 세션</b> <span class="badge ${x.status==='입금대기'?'b-no':(x.done>=x.total?'b-done':'b-ok')}">${x.status==='입금대기'?'입금 확인 전':(x.done>=x.total?'완료':'진행 중')}</span><div class="muted">${x.done}회 완료 · 예약 포함 ${x.used}회 사용${x.prior?` (앱 밖 ${x.prior}회 포함)`:''}</div></div>
         <div class="stepper"><button data-sm="${x.id}" aria-label="회차 줄이기">−</button><b data-st2="${x.id}" style="font-size:18px;min-width:40px;text-align:center">${x.total}회</b><button data-sp="${x.id}" aria-label="회차 늘리기">+</button></div></div>
+        <div class="row" style="justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">앱 밖에서 이미 진행</span>
+        <div class="stepper"><button data-pm="${x.id}" aria-label="이전 진행 줄이기">−</button><b data-pv="${x.id}" style="font-size:16px;min-width:40px;text-align:center">${x.prior||0}회</b><button data-pp="${x.id}" aria-label="이전 진행 늘리기">+</button></div></div>
         ${x.status==='입금대기'?`<button class="btn sm" style="margin-top:8px" data-paid="${x.id}">입금 확인</button>`:''}</div>`).join('')||'<p class="muted" style="margin:0">아직 세션이 없습니다. 첫 신청을 확정하면 1번째 세션이 생깁니다.</p>'}
       <button class="btn sm ghost" style="margin-top:0" id="snew">+ 새 세션 열기 (입금 확인된 연장)</button>
-      <button class="btn sm ghost" style="margin-top:0" id="pastb">+ 앱 밖에서 진행한 회차 기록</button>
+      <button class="btn sm ghost" style="margin-top:0" id="pastb">+ 앱 밖에서 진행한 날짜 기록</button>
       <div id="pastf" hidden style="display:grid;gap:8px">
         <p class="muted" style="margin:0">이미 만나서 진행한 회차를 완료로 남깁니다. 캘린더에는 넣지 않고, 뒤 일정 회차가 날짜 순서대로 다시 매겨집니다.</p>
         <div class="row"><input type="date" id="pd" value="${D.today}" max="${D.today}" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--paper);color:var(--ink)">
@@ -208,6 +210,9 @@ function openCust(cid){
   document.getElementById('cl').onclick=close;
   document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
   const setS=(sid,dv)=>{const x=sessOf(sid);const nt=Math.max(1,Math.min(30,x.total+dv));const isLast=!sessList(cid).some(y=>y.no>x.no);if(nt<x.used&&isLast){toast(`예약이 ${x.used}건 잡혀 있어서 ${x.used}회보다 줄일 수 없어요`);return}x.total=nt;layer.querySelector(`[data-st2="${sid}"]`).textContent=x.total+'회';clearTimeout(tTimer[sid]);tTimer[sid]=setTimeout(async()=>{try{await run(()=>api('admin_sess_total',{key:KEY,id:sid,total:x.total}),null,x.no+'번째 세션을 '+x.total+'회로 저장했습니다');D=await api('admin_list',{key:KEY});if(layer.innerHTML)openCust(cid)}catch(e){}},700)};
+  const setP=(sid,dv)=>{const x=sessOf(sid);const np=Math.max(0,Math.min(x.total-1,(x.prior||0)+dv));if(np===(x.prior||0))return;x.prior=np;layer.querySelector(`[data-pv="${sid}"]`).textContent=np+'회';clearTimeout(tTimer['p'+sid]);tTimer['p'+sid]=setTimeout(async()=>{try{await run(()=>api('admin_sess_prior',{key:KEY,id:sid,prior:np}),null,x.no+'번째 세션: 앱 밖에서 '+np+'회 진행으로 저장했습니다');D=await api('admin_list',{key:KEY});if(layer.innerHTML)openCust(cid)}catch(e){}},700)};
+  layer.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>setP(b.dataset.pm,-1));
+  layer.querySelectorAll('[data-pp]').forEach(b=>b.onclick=()=>setP(b.dataset.pp,1));
   layer.querySelectorAll('[data-sm]').forEach(b=>b.onclick=()=>setS(b.dataset.sm,-1));
   layer.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>setS(b.dataset.sp,1));
   layer.querySelectorAll('[data-paid]').forEach(b=>b.onclick=async()=>{try{await run(()=>api('admin_sess_paid',{key:KEY,id:b.dataset.paid}),b,'입금 확인으로 바꿨습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}});
