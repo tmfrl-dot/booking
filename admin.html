@@ -216,7 +216,7 @@ function openCust(cid){
         <div class="stepper"><button data-sm="${x.id}" aria-label="회차 줄이기">−</button><b data-st2="${x.id}" style="font-size:18px;min-width:40px;text-align:center">${x.total}회</b><button data-sp="${x.id}" aria-label="회차 늘리기">+</button></div></div>
         <div class="row" style="justify-content:space-between;align-items:center;margin-top:8px"><span class="muted">앱 쓰기 전에 진행한 회차</span>
         <div class="stepper"><button data-pm="${x.id}" aria-label="이전 진행 줄이기">−</button><b data-pv="${x.id}" style="font-size:16px;min-width:40px;text-align:center">${x.prior||0}회</b><button data-pp="${x.id}" aria-label="이전 진행 늘리기">+</button></div></div>
-        ${x.status==='입금대기'?`<button class="btn sm" style="margin-top:8px" data-paid="${x.id}">입금 확인</button>`:''}</div>`).join('')||'<p class="muted" style="margin:0">아직 세션이 없습니다. 첫 신청을 확정하면 1번째 세션이 생깁니다.</p>'}
+        ${x.status==='입금대기'?`<button class="btn sm" style="margin-top:8px" data-paid="${x.id}">입금 확인</button>`:(x.done===0&&x.used>0?`<button class="btn sm ghost" style="margin-top:8px" data-unpaid="${x.id}">아직 입금 전이에요 (가예약으로 돌리기)</button>`:'')}</div>`).join('')||'<p class="muted" style="margin:0">아직 세션이 없습니다. 첫 신청을 확정하면 1번째 세션이 생깁니다.</p>'}
       <button class="btn sm ghost" style="margin-top:0" id="snew">+ 새 세션 열기 (입금 확인된 연장)</button>
       <p class="muted" style="margin:0">예약은 날짜 순서대로 1번째 세션부터 회차 수만큼 자동으로 채워집니다.</p>
     </div>
@@ -248,6 +248,8 @@ function openCust(cid){
   layer.querySelectorAll('[data-sm]').forEach(b=>b.onclick=()=>setS(b.dataset.sm,-1));
   layer.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>setS(b.dataset.sp,1));
   layer.querySelectorAll('[data-paid]').forEach(b=>b.onclick=async()=>{try{await run(()=>api('admin_sess_paid',{key:KEY,id:b.dataset.paid}),b,'입금 확인으로 바꿨습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}});
+  layer.querySelectorAll('[data-unpaid]').forEach(b=>b.onclick=async()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent='한 번 더 누르면 이 세션 일정이 가예약으로 바뀝니다';return}
+    try{const r=await run(()=>api('admin_sess_unpaid',{key:KEY,id:b.dataset.unpaid}),b);D=await api('admin_list',{key:KEY});if(r.held.length&&r.customer)smsSheet('가예약으로 돌렸습니다',`일정 ${r.held.length}건이 가예약이 되었고, 캘린더에는 "${r.customer.name} 가예약"으로 바뀌었습니다. 회차 이틀 전까지 입금이 없으면 자동으로 풀립니다.`,r.customer,holdText(r.customer,r.held),()=>openCust(cid));else openCust(cid)}catch(e){}});
   document.getElementById('snew').onclick=async e=>{const b=e.target;if(!b.dataset.sure){b.dataset.sure=1;b.textContent='한 번 더 누르면 4회 세션을 엽니다';return}
     try{await run(()=>api('admin_sess_new',{key:KEY,cid,total:4}),b,'새 세션을 열었습니다. 회차 수는 −/+로 조정하세요');D=await api('admin_list',{key:KEY});openCust(cid)}catch(x){}};
   document.getElementById('rdone').onclick=()=>{const f=document.getElementById('sidef');f.hidden=!f.hidden};
