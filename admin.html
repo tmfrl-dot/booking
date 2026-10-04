@@ -118,10 +118,12 @@ function render(){
   if(tab==='sch'){
     const items=[];
     D.events.forEach(e=>items.push({k:e.date,s:e.slot,html:`<span class="fam">가족 캘린더 · ${esc(e.title)}</span>`}));
+    Object.keys(D.blocks||{}).filter(k=>k>=today).forEach(k=>Object.keys(D.blocks[k]).forEach(sl=>items.push({k,s:sl,html:'<span class="fam">내가 막아둔 시간 · 예약 받지 않음</span>'})));
     D.bookings.filter(b=>active(b)&&b.date>=today).forEach(b=>{const c=cust(b.cid)||{name:'?'};items.push({k:b.date,s:side(b)?'all':b.slot,html:`<b>컨설팅 ${esc(c.name)}${b.status==='confirmed'?' '+rlabel(b):''}${side(b)?' · 따로 진행':''}</b> <span class="badge ${b.status==='confirmed'?'b-ok':(b.status==='hold'?'b-no':'b-wait')}">${b.status==='confirmed'?'확정':(b.status==='hold'?'가예약':((sessOf(b.session)||{}).status==='입금대기'?'입금 전 신청':'대기'))}</span>`})});
     const so={am:0,pm:1,all:-1};items.sort((a,b)=>a.k.localeCompare(b.k)||so[a.s]-so[b.s]);
-    p.innerHTML=`<p class="muted" style="margin-top:0">앞으로 5주 동안 예약 시간대에 걸친 가족 캘린더 일정과 컨설팅 예약입니다.</p>
+    p.innerHTML=`<button class="btn sm ghost" style="margin:0 0 12px" id="blk">예약 받지 않을 시간 막기 / 풀기</button><p class="muted" style="margin-top:0">앞으로 5주 동안 예약 시간대에 걸친 가족 캘린더 일정과 컨설팅 예약입니다.</p>
       <ul class="sched">${items.map(it=>`<li><span class="d">${fmtShort(it.k)}<br><span class="muted">${it.s==='all'?'종일':SLOTS[it.s].short}</span></span><div>${it.html}</div></li>`).join('')||'<li>일정이 없습니다.</li>'}</ul>`;
+    document.getElementById('blk').onclick=blockSheet;
   }
   if(tab==='msg'){
     if(!rem.length){p.innerHTML='<div class="card muted">오늘 보낼 문자가 없습니다.<br>내일 일정이 있는 분과, 입금 마감이 다가온 가예약이 여기에 나옵니다.</div>';return}
@@ -282,6 +284,26 @@ function openCust(cid){
       else openCust(cid);
     }catch(e){}
   });
+}
+async function blockSheet(){
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>예약 받지 않을 시간</h3>
+    <p class="muted" style="margin:0 0 8px">캘린더에 일정을 넣지 않아도, 여기서 누른 시간은 고객 예약 화면에 "마감"으로 보입니다. 다시 누르면 풀립니다.</p>
+    <div id="pk">${loading('시간을 불러오고 있습니다')}</div><button class="btn ghost" id="cl">닫기</button></div></div>`;
+  const back=()=>{closeSheet();load(true)};
+  document.getElementById('cl').onclick=back;
+  document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')back()};
+  let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('pk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
+  const pk=document.getElementById('pk');
+  const draw=()=>{const B=S.blocks||{};const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h);
+    pk.innerHTML=`<div class="days">${ks.map(k=>{const st=sl=>(B[k]&&B[k][sl])?'mine':((S.raw||S.days)[k][sl]?'open':'busy');const all=['am','pm'].every(sl=>st(sl)==='mine'),can=['am','pm'].some(sl=>st(sl)!=='busy');
+      return `<div class="day"><div class="dayhead" style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>${fmt(k)}</b>${can?`<button class="refresh" data-bd="${k}" data-on="${all?0:1}">${all?'하루 전체 풀기':'하루 전체 막기'}</button>`:''}</div><div class="slots">${['am','pm'].map(sl=>{const t=st(sl);
+        return t==='busy'?`<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">이미 일정 있음</span></div>`
+          :`<button class="slot open" data-bk="${k}" data-bs="${sl}" data-on="${t==='mine'?0:1}" style="${t==='mine'?'background:var(--heart-soft);border-color:var(--heart)':''}"><span class="t">${SLOTS[sl].label}</span><span class="s" style="${t==='mine'?'color:var(--heart);font-weight:700':''}">${t==='mine'?'막아둠 · 누르면 풀기':'예약 받는 중 · 누르면 막기'}</span></button>`}).join('')}</div></div>`}).join('')}</div>`;
+    const send=async(date,slot,on,btn)=>{try{const r=await run(()=>api('admin_block',{key:KEY,date,slot,on:!!on}),btn);S.blocks=r.blocks;D.blocks=r.blocks;draw()}catch(e){}};
+    pk.querySelectorAll('[data-bk]').forEach(b=>b.onclick=()=>send(b.dataset.bk,b.dataset.bs,b.dataset.on==='1',b));
+    pk.querySelectorAll('[data-bd]').forEach(b=>b.onclick=()=>send(b.dataset.bd,'all',b.dataset.on==='1',b));
+  };
+  draw();
 }
 function newCust(){
   layer.innerHTML=`<div class="sheet-bg" id="bg"><form class="sheet" id="nf" novalidate><h3>고객 직접 등록</h3>
