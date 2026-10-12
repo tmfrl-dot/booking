@@ -59,7 +59,7 @@ async function load(quiet){
   const cached=!D&&store.get('adminD');
   if(cached&&cached.customers){D=cached;render();syncing(true)}
   else if(!quiet||!D)app.innerHTML=brand('관리 화면 · 컨설팅 폰 전용')+loading();
-  try{const r=await api('admin_list',{key:KEY});D=r;store.set('adminD',r);syncing(false);if(!cached||!layer.innerHTML)render();else if(openCid&&document.getElementById('addb')){render();openCust(openCid)}}
+  try{const r=await api('admin_list',{key:KEY});D=r;lastLoad=Date.now();store.set('adminD',r);syncing(false);if(!cached||!layer.innerHTML)render();else if(openCid&&document.getElementById('addb')){render();openCust(openCid)}}
   catch(e){
     syncing(false);
     if(e.auth===false){store.del('adminKey');store.del('adminD');return login(e.message)}
@@ -371,6 +371,15 @@ async function pickNew(cid,bid){
     }catch(e){}
   });
 }
+// 폰에서 관리 화면을 열어둔 채 다음 날 다시 보면 어제 목록이 그대로 남아 있어서,
+// 화면으로 돌아올 때 날짜가 바뀌었거나 5분이 지났으면 최신 목록(오늘 보낼 문자 포함)을 다시 불러옴
+let lastLoad=0;
+function refreshIfStale(){
+  if(document.visibilityState!=='visible'||!KEY||!D)return;
+  if(D.today!==key(new Date())||Date.now()-lastLoad>5*60*1000)load(true);
+}
+document.addEventListener('visibilitychange',refreshIfStale);
+window.addEventListener('pageshow',e=>{if(e.persisted)refreshIfStale()});
 if(KEY)load();else login();
 })();
 </script>
