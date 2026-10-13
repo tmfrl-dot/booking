@@ -117,7 +117,7 @@ function render(){
   }
   if(tab==='sch'){
     const items=[];
-    D.events.forEach(e=>items.push({k:e.date,s:e.slot,c:'fam',short:e.title,html:`<span class="fam">가족 캘린더 · ${esc(e.title)}</span>`}));
+    D.events.filter(e=>!/근무|도대회|축구|k7/i.test(e.title||'')).forEach(e=>items.push({k:e.date,s:e.slot,c:'fam',short:e.title,html:`<span class="fam">가족 캘린더 · ${esc(e.title)}</span>`}));
     Object.keys(D.blocks||{}).filter(k=>k>=today).forEach(k=>Object.keys(D.blocks[k]).forEach(sl=>items.push({k,s:sl,c:'fam',short:'막음',html:'<span class="fam">내가 막아둔 시간 · 예약 받지 않음</span>'})));
     D.bookings.filter(b=>active(b)&&b.date>=today).forEach(b=>{const c=cust(b.cid)||{name:'?'};items.push({k:b.date,s:side(b)?'all':b.slot,t:b.start||'',b,c:b.status==='confirmed'?'ok':(b.status==='hold'?'hold':'wait'),short:c.name,html:`<b>컨설팅 ${esc(c.name)}${b.status==='confirmed'?' '+rlabel(b):''}${side(b)?' · 따로 진행':''}</b> <span class="badge ${b.status==='confirmed'?'b-ok':(b.status==='hold'?'b-no':'b-wait')}">${b.status==='confirmed'?'확정':(b.status==='hold'?'가예약':((sessOf(b.session)||{}).status==='입금대기'?'입금 전 신청':'대기'))}</span>`})});
     const so={am:0,pm:1,all:-1};items.sort((a,b)=>a.k.localeCompare(b.k)||so[a.s]-so[b.s]||(a.t||'').localeCompare(b.t||''));
@@ -147,10 +147,15 @@ function render(){
       sb.innerHTML=h;
       document.getElementById('smp').onclick=()=>{schMonth=new Date(y,m-1,1);schDay=null;render()};
       document.getElementById('smn').onclick=()=>{schMonth=new Date(y,m+1,1);schDay=null;render()};
-      sb.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{schDay=c.dataset.d;render();const x=document.getElementById('sdp');if(x)x.scrollIntoView({behavior:'smooth',block:'nearest'})});
-      const dp=document.getElementById('sdp');
-      if(schDay&&parse(schDay).getMonth()===m){const l=byDay[schDay]||[];dp.innerHTML=`<p class="t">${fmt(schDay)}</p>`+(l.length?`<ul class="sched">${l.map(li).join('')}</ul>`:'<p class="muted" style="margin:0">일정이 없습니다.</p>')}
-      else dp.innerHTML='<p class="muted" style="margin:0">날짜를 누르면 그날 일정이 자세히 나옵니다.</p>';
+      // 날짜를 누르면 화면은 그대로 두고, 그날 일정이 아래에서 위로 올라오는 창으로 뜸
+      sb.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{
+        sb.querySelectorAll('.cell.pick').forEach(x=>x.classList.remove('pick'));c.classList.add('pick');schDay=c.dataset.d;
+        const l=byDay[schDay]||[];
+        layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>${fmt(schDay)}</h3>${l.length?`<ul class="sched">${l.map(li).join('')}</ul>`:'<p class="muted">일정이 없습니다.</p>'}<button class="btn ghost" id="cl">닫기</button></div></div>`;
+        const close=()=>{layer.innerHTML=''};
+        document.getElementById('cl').onclick=close;document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
+      });
+      document.getElementById('sdp').innerHTML='<p class="muted" style="margin:0">날짜를 누르면 그날 일정이 위로 올라와 자세히 보입니다.</p>';
     }
   }
   if(tab==='msg'){
