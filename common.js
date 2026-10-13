@@ -2,6 +2,14 @@
 const C=window.OPU;
 const SLOTS={am:{label:'오전 10:00 ~ 12:00',short:'오전 10시',tag:'오전'},pm:{label:'오후 2:00 ~ 4:00',short:'오후 2시',tag:'오후'}};
 const WD=['일','월','화','수','목','금','토'];
+// 시간을 직접 입력한 예약(start·end가 있음)은 그 시간으로, 아니면 기본 칸 이름으로 표시
+const t12=t=>{const[h,m]=t.split(':').map(Number);return{ap:h<12?'오전':'오후',h:h>12?h-12:h,m}};
+function SL(x){
+  if(!x||!x.start)return SLOTS[x&&x.slot]||SLOTS.am;
+  const a=t12(x.start),b=t12(x.end),mm=t=>t.m?':'+String(t.m).padStart(2,'0'):'';
+  const sh=a.ap+' '+a.h+mm(a)+'시~'+(b.ap!==a.ap?b.ap+' ':'')+b.h+mm(b)+'시';
+  return{label:a.ap+' '+a.h+':'+String(a.m).padStart(2,'0')+' ~ '+(b.ap!==a.ap?b.ap+' ':'')+b.h+':'+String(b.m).padStart(2,'0'),short:sh,tag:sh};
+}
 const HEART='<path d="M12 20.5s-7.5-4.6-9.3-9.2C1.4 7.9 3.6 4.5 7 4.5c2.1 0 3.6 1.2 5 3 1.4-1.8 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8-1.8 4.6-9.3 9.2-9.3 9.2z"/>';
 const pad=n=>String(n).padStart(2,'0');
 const key=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
@@ -36,5 +44,5 @@ function copy(text){
   else toast('길게 눌러 직접 복사해 주세요');
 }
 const store={get(k){try{return JSON.parse(localStorage.getItem('opu-'+k))}catch(e){return null}},set(k,v){try{localStorage.setItem('opu-'+k,JSON.stringify(v))}catch(e){}},del(k){try{localStorage.removeItem('opu-'+k)}catch(e){}}};
-window.U={C,SLOTS,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,copy,store,syncing};
+window.U={C,SLOTS,SL,WD,HEART,key,parse,addDays,fmt,fmtShort,esc,heart,brand,foot,loading,api,toast,copy,store,syncing};
 })();
