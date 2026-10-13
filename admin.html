@@ -335,7 +335,7 @@ async function addFor(cid){
       <div id="clist"></div>
     </details>`:''}
     <div id="pk">${loading('빈 시간을 불러오고 있습니다')}</div>
-    <button class="btn" id="go" disabled>시간을 골라주세요</button><button class="btn ghost" id="cl">닫기</button></div></div>`;
+    <div style="position:sticky;bottom:0;background:var(--paper);padding:6px 0 2px;z-index:2"><button class="btn" id="go" disabled>시간을 골라주세요</button></div><button class="btn ghost" id="cl">닫기</button></div></div>`;
   const back=()=>openCust(cid);
   const clist=()=>{const l=picks.map((x,i)=>[x,i]).filter(([x])=>x.start);document.getElementById('clist').innerHTML=l.map(([x,i])=>`<div class="pick prow" style="margin:8px 0 0;display:flex;justify-content:space-between;align-items:center"><span>${fmt(x.date)} ${SL(x).label}</span><button class="btn sm ghost" type="button" style="margin:0;white-space:nowrap" data-cx="${i}">빼기</button></div>`).join('');
     document.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{picks.splice(Number(b.dataset.cx),1);clist();upd()})};
@@ -344,8 +344,11 @@ async function addFor(cid){
     if(!d||!st||!en){er.textContent='날짜와 시작·끝 시간을 모두 넣어주세요.';return}
     if(st>=en){er.textContent='끝나는 시간이 시작보다 뒤여야 합니다.';return}
     if(d<key(new Date())){er.textContent='지난 날짜는 넣을 수 없습니다.';return}
-    if(picks.some(x=>x.date===d&&x.start&&x.start<en&&x.end>st)){er.textContent='이미 넣은 시간과 겹칩니다.';return}
-    er.textContent='';picks.push({date:d,start:st,end:en,slot:st<'12:00'?'am':'pm'});clist();upd()};
+    const same=picks.some(x=>x.date===d&&x.start===st&&x.end===en);
+    if(!same&&picks.some(x=>x.date===d&&x.start&&x.start<en&&x.end>st)){er.style.color='';er.textContent='아래에 넣어둔 시간과 겹칩니다. 빼기를 누르고 다시 넣어주세요.';return}
+    if(!same){picks.push({date:d,start:st,end:en,slot:st<'12:00'?'am':'pm'});clist();upd()}
+    er.style.color='var(--ink)';er.textContent='넣었습니다. 아직 등록 전이에요 — 맨 아래 \''+go.textContent+'\' 버튼을 눌러야 캘린더에 들어갑니다.';
+    go.scrollIntoView({behavior:'smooth',block:'end'})};
   document.getElementById('cl').onclick=back;
   const go=document.getElementById('go');
   const upd=()=>{go.disabled=!picks.length||!mode;go.textContent=!mode?'확정 / 가예약을 먼저 골라주세요':(picks.length?picks.length+'건 '+(mode==='hold'?'가예약으로':'확정으로')+' 등록하기':'시간을 골라주세요')};
