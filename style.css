@@ -228,3 +228,7 @@ h2{font-weight:800;font-size:21px;letter-spacing:-0.02em;margin:28px 0 10px}
 .legend.acl{flex-wrap:wrap;gap:6px 12px}
 .legend.acl span{display:flex;align-items:center;gap:4px}
 .legend.acl .chip{width:auto;padding:1px 5px}
+
+/* 고른 날짜 칸이 다른 칸보다 내려가지 않게 (.pick 공용 여백이 달력 칸에 붙던 문제) */
+.cell.pick{margin:0;padding:2px;font-weight:inherit}
+.acal .cell.pick{padding:4px 1px}
