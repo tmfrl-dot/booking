@@ -22,7 +22,7 @@ const {C,SLOTS,SL,key,parse,addDays,fmt,fmtShort,esc,brand,loading,api,toast,cop
 const app=document.getElementById('app'),layer=document.getElementById('layer');
 let openCid=null;
 const closeSheet=()=>{layer.innerHTML='';openCid=null};
-let KEY=store.get('adminKey'), D=null, tab='req';
+let KEY=store.get('adminKey'), D=null, tab='req', schMode=store.get('schMode')||'cal', schMonth=null, schDay=null;
 const BASE=location.href.split('#')[0].split('?')[0].replace(/admin\.html$/,'');
 const myLink=cid=>BASE+'?c='+cid;
 const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -117,13 +117,41 @@ function render(){
   }
   if(tab==='sch'){
     const items=[];
-    D.events.forEach(e=>items.push({k:e.date,s:e.slot,html:`<span class="fam">가족 캘린더 · ${esc(e.title)}</span>`}));
-    Object.keys(D.blocks||{}).filter(k=>k>=today).forEach(k=>Object.keys(D.blocks[k]).forEach(sl=>items.push({k,s:sl,html:'<span class="fam">내가 막아둔 시간 · 예약 받지 않음</span>'})));
-    D.bookings.filter(b=>active(b)&&b.date>=today).forEach(b=>{const c=cust(b.cid)||{name:'?'};items.push({k:b.date,s:side(b)?'all':b.slot,html:`<b>컨설팅 ${esc(c.name)}${b.status==='confirmed'?' '+rlabel(b):''}${side(b)?' · 따로 진행':''}</b> <span class="badge ${b.status==='confirmed'?'b-ok':(b.status==='hold'?'b-no':'b-wait')}">${b.status==='confirmed'?'확정':(b.status==='hold'?'가예약':((sessOf(b.session)||{}).status==='입금대기'?'입금 전 신청':'대기'))}</span>`})});
-    const so={am:0,pm:1,all:-1};items.sort((a,b)=>a.k.localeCompare(b.k)||so[a.s]-so[b.s]);
-    p.innerHTML=`<button class="btn sm ghost" style="margin:0 0 12px" id="blk">예약 받지 않을 시간 막기 / 풀기</button><p class="muted" style="margin-top:0">앞으로 5주 동안 예약 시간대에 걸친 가족 캘린더 일정과 컨설팅 예약입니다.</p>
-      <ul class="sched">${items.map(it=>`<li><span class="d">${fmtShort(it.k)}<br><span class="muted">${it.s==='all'?'종일':SLOTS[it.s].short}</span></span><div>${it.html}</div></li>`).join('')||'<li>일정이 없습니다.</li>'}</ul>`;
+    D.events.forEach(e=>items.push({k:e.date,s:e.slot,c:'fam',short:e.title,html:`<span class="fam">가족 캘린더 · ${esc(e.title)}</span>`}));
+    Object.keys(D.blocks||{}).filter(k=>k>=today).forEach(k=>Object.keys(D.blocks[k]).forEach(sl=>items.push({k,s:sl,c:'fam',short:'막음',html:'<span class="fam">내가 막아둔 시간 · 예약 받지 않음</span>'})));
+    D.bookings.filter(b=>active(b)&&b.date>=today).forEach(b=>{const c=cust(b.cid)||{name:'?'};items.push({k:b.date,s:side(b)?'all':b.slot,t:b.start||'',b,c:b.status==='confirmed'?'ok':(b.status==='hold'?'hold':'wait'),short:c.name,html:`<b>컨설팅 ${esc(c.name)}${b.status==='confirmed'?' '+rlabel(b):''}${side(b)?' · 따로 진행':''}</b> <span class="badge ${b.status==='confirmed'?'b-ok':(b.status==='hold'?'b-no':'b-wait')}">${b.status==='confirmed'?'확정':(b.status==='hold'?'가예약':((sessOf(b.session)||{}).status==='입금대기'?'입금 전 신청':'대기'))}</span>`})});
+    const so={am:0,pm:1,all:-1};items.sort((a,b)=>a.k.localeCompare(b.k)||so[a.s]-so[b.s]||(a.t||'').localeCompare(b.t||''));
+    const li=it=>`<li><span class="d">${fmtShort(it.k)}<br><span class="muted">${it.s==='all'?'종일':(it.b?SL(it.b).short:SLOTS[it.s].short)}</span></span><div>${it.html}</div></li>`;
+    p.innerHTML=`<div class="row" style="margin:0 0 10px;gap:8px"><button class="btn sm${schMode==='cal'?'':' ghost'}" style="margin:0" data-sm="cal">달력으로 보기</button><button class="btn sm${schMode==='list'?'':' ghost'}" style="margin:0" data-sm="list">목록으로 보기</button><button class="btn sm ghost" style="margin:0" id="blk">시간 막기 / 풀기</button></div><div id="schb"></div>`;
+    p.querySelectorAll('[data-sm]').forEach(b=>b.onclick=()=>{schMode=b.dataset.sm;store.set('schMode',schMode);render()});
     document.getElementById('blk').onclick=blockSheet;
+    const sb=document.getElementById('schb');
+    if(schMode==='list'){sb.innerHTML=`<p class="muted" style="margin-top:0">앞으로의 컨설팅 예약과, 예약 시간대에 걸친 가족 캘린더 일정입니다.</p><ul class="sched">${items.map(li).join('')||'<li>일정이 없습니다.</li>'}</ul>`}
+    else{
+      const byDay={};items.forEach(it=>(byDay[it.k]=byDay[it.k]||[]).push(it));
+      const t=parse(today),minM=new Date(t.getFullYear(),t.getMonth(),1);
+      const lastK=items.length?items[items.length-1].k:today,lk=parse(lastK);let maxM=new Date(lk.getFullYear(),lk.getMonth(),1);if(maxM<minM)maxM=minM;
+      if(!schMonth||schMonth<minM)schMonth=minM;if(schMonth>maxM&&maxM>minM)schMonth=maxM;
+      const y=schMonth.getFullYear(),m=schMonth.getMonth(),first=new Date(y,m,1),days=new Date(y,m+1,0).getDate();
+      let h=`<div class="monnav"><button class="navbtn" id="smp" ${schMonth<=minM?'disabled':''} aria-label="이전 달">‹</button><strong>${y}년 ${m+1}월</strong><button class="navbtn" id="smn" ${schMonth>=maxM?'disabled':''} aria-label="다음 달">›</button></div>
+      <div class="legend acl"><span><i class="chip ok">이름</i>확정</span><span><i class="chip hold">이름</i>가예약</span><span><i class="chip wait">이름</i>신청 대기</span><span><i class="chip fam">일정</i>개인·가족</span></div>
+      <div class="cal acal"><div class="wk">${['일','월','화','수','목','금','토'].map(w=>`<div>${w}</div>`).join('')}</div><div class="grid">`;
+      for(let i=0;i<first.getDay();i++)h+='<div></div>';
+      for(let d=1;d<=days;d++){
+        const k=key(new Date(y,m,d)),w=new Date(y,m,d).getDay(),l=byDay[k]||[];
+        const cls=[];if(k===today)cls.push('today');if(w===0)cls.push('hol');if(k<today)cls.push('dim');if(schDay===k)cls.push('pick');
+        const ch=l.slice(0,3).map(it=>`<i class="chip ${it.c}">${esc(it.short)}</i>`).join('')+(l.length>3?`<i class="chip more">+${l.length-3}</i>`:'');
+        h+=`<button class="cell ${cls.join(' ')}" data-d="${k}"><span class="n">${d}</span>${ch}</button>`;
+      }
+      h+=`</div></div><div class="daypanel" id="sdp"></div>`;
+      sb.innerHTML=h;
+      document.getElementById('smp').onclick=()=>{schMonth=new Date(y,m-1,1);schDay=null;render()};
+      document.getElementById('smn').onclick=()=>{schMonth=new Date(y,m+1,1);schDay=null;render()};
+      sb.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{schDay=c.dataset.d;render();const x=document.getElementById('sdp');if(x)x.scrollIntoView({behavior:'smooth',block:'nearest'})});
+      const dp=document.getElementById('sdp');
+      if(schDay&&parse(schDay).getMonth()===m){const l=byDay[schDay]||[];dp.innerHTML=`<p class="t">${fmt(schDay)}</p>`+(l.length?`<ul class="sched">${l.map(li).join('')}</ul>`:'<p class="muted" style="margin:0">일정이 없습니다.</p>')}
+      else dp.innerHTML='<p class="muted" style="margin:0">날짜를 누르면 그날 일정이 자세히 나옵니다.</p>';
+    }
   }
   if(tab==='msg'){
     if(!rem.length){p.innerHTML='<div class="card muted">오늘 보낼 문자가 없습니다.<br>다음 영업일에 일정이 있는 분과, 입금 마감이 다가온 가예약이 여기에 나옵니다.</div>';return}
@@ -326,6 +354,7 @@ async function addFor(cid){
   layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>${esc(c.name)} 일정 잡아드리기</h3>
     <p class="muted" style="margin:0 0 8px">빈 시간을 골라주세요. 여러 개를 고를 수 있어요. 등록하면 가족 캘린더와 고객 전용 페이지에 바로 보입니다.</p>
     <div class="row" style="margin-bottom:8px"><button class="btn sm" data-m="confirmed" style="margin-top:0">확정 (입금 완료)</button><button class="btn sm ghost" data-m="hold" style="margin-top:0">가예약 (입금 전)</button></div>
+    <button class="btn" id="go" disabled style="margin:0 0 12px">시간을 골라주세요</button>
     ${D.ver>=2?`<details class="card" id="cx" style="margin:0 0 12px"><summary style="font-weight:700;cursor:pointer">시간 직접 입력 (3시간 등 정해진 칸 밖 시간)</summary>
       <p class="muted" style="margin:8px 0">내 캘린더 일정과는 상관없이 이 시간으로 잡습니다. 앱에 이미 잡힌 다른 예약과 겹칠 때만 빠집니다. 같은 시간에 달력에 직접 넣어둔 일정이 있으면 지워주세요.</p>
       <div class="field"><label for="cd">날짜</label><input id="cd" type="date" value="${key(addDays(new Date(),1))}"></div>
@@ -335,7 +364,7 @@ async function addFor(cid){
       <div id="clist"></div>
     </details>`:''}
     <div id="pk">${loading('빈 시간을 불러오고 있습니다')}</div>
-    <div style="position:sticky;bottom:0;background:var(--paper);padding:6px 0 2px;z-index:2"><button class="btn" id="go" disabled>시간을 골라주세요</button></div><button class="btn ghost" id="cl">닫기</button></div></div>`;
+    <button class="btn ghost" id="cl">닫기</button></div></div>`;
   const back=()=>openCust(cid);
   const clist=()=>{const l=picks.map((x,i)=>[x,i]).filter(([x])=>x.start);document.getElementById('clist').innerHTML=l.map(([x,i])=>`<div class="pick prow" style="margin:8px 0 0;display:flex;justify-content:space-between;align-items:center"><span>${fmt(x.date)} ${SL(x).label}</span><button class="btn sm ghost" type="button" style="margin:0;white-space:nowrap" data-cx="${i}">빼기</button></div>`).join('');
     document.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{picks.splice(Number(b.dataset.cx),1);clist();upd()})};
@@ -347,8 +376,8 @@ async function addFor(cid){
     const same=picks.some(x=>x.date===d&&x.start===st&&x.end===en);
     if(!same&&picks.some(x=>x.date===d&&x.start&&x.start<en&&x.end>st)){er.style.color='';er.textContent='아래에 넣어둔 시간과 겹칩니다. 빼기를 누르고 다시 넣어주세요.';return}
     if(!same){picks.push({date:d,start:st,end:en,slot:st<'12:00'?'am':'pm'});clist();upd()}
-    er.style.color='var(--ink)';er.textContent='넣었습니다. 아직 등록 전이에요 — 맨 아래 \''+go.textContent+'\' 버튼을 눌러야 캘린더에 들어갑니다.';
-    go.scrollIntoView({behavior:'smooth',block:'end'})};
+    er.style.color='var(--ink)';er.textContent='넣었습니다. 아직 등록 전이에요 — 위쪽 \''+go.textContent+'\' 버튼을 눌러야 캘린더에 들어갑니다.';
+    go.scrollIntoView({behavior:'smooth',block:'center'})};
   document.getElementById('cl').onclick=back;
   const go=document.getElementById('go');
   const upd=()=>{go.disabled=!picks.length||!mode;go.textContent=!mode?'확정 / 가예약을 먼저 골라주세요':(picks.length?picks.length+'건 '+(mode==='hold'?'가예약으로':'확정으로')+' 등록하기':'시간을 골라주세요')};
