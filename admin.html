@@ -391,9 +391,42 @@ async function addFor(cid){
   let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('pk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
   const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm));
   const pk=document.getElementById('pk');
-  pk.innerHTML=ks.length?`<div class="days">${ks.map(k=>`<div class="day"><div class="dayhead"><b>${fmt(k)}</b></div><div class="slots">${['am','pm'].map(s=>S.days[k][s]?`<button class="slot open" data-k="${k}" data-s="${s}"><span class="t">${SLOTS[s].label}</span></button>`:`<div class="slot off"><span class="t">${SLOTS[s].label}</span><span class="s">마감</span></div>`).join('')}</div></div>`).join('')}</div>`:'<div class="card muted">비어 있는 시간이 없습니다.</div>';
-  pk.querySelectorAll('.slot.open').forEach(b=>b.onclick=()=>{const i=picks.findIndex(x=>!x.start&&x.date===b.dataset.k&&x.slot===b.dataset.s);
-    if(i>=0){picks.splice(i,1);b.style.background='';b.style.borderColor=''}else{picks.push({date:b.dataset.k,slot:b.dataset.s});b.style.background='var(--heart-soft)';b.style.borderColor='var(--heart)'}upd()});
+  // 달력 / 목록 보기 (고객 화면처럼 하트로 빈 시간 표시)
+  let pv=store.get('pickMode')||'cal',pm=null,pd=null;
+  const picked=(k,sl)=>picks.some(x=>!x.start&&x.date===k&&x.slot===sl);
+  const toggle=(k,sl)=>{const i=picks.findIndex(x=>!x.start&&x.date===k&&x.slot===sl);if(i>=0)picks.splice(i,1);else picks.push({date:k,slot:sl});upd();draw()};
+  const slotB=(k,sl)=>S.days[k]&&S.days[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="${picked(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span>${picked(k,sl)?'<span class="s" style="color:var(--heart);font-weight:700">고름 · 다시 누르면 취소</span>':''}</button>`:`<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">마감</span></div>`;
+  const draw=()=>{
+    if(!ks.length){pk.innerHTML='<div class="card muted">비어 있는 시간이 없습니다.</div>';return}
+    let h=`<div class="row" style="margin:0 0 10px;gap:8px"><button class="btn sm${pv==='cal'?'':' ghost'}" style="margin:0" data-pv="cal">달력으로 보기</button><button class="btn sm${pv==='list'?'':' ghost'}" style="margin:0" data-pv="list">목록으로 보기</button></div>`;
+    if(pv==='list')h+=`<div class="days">${ks.map(k=>`<div class="day"><div class="dayhead"><b>${fmt(k)}</b></div><div class="slots">${slotB(k,'am')}${slotB(k,'pm')}</div></div>`).join('')}</div>`;
+    else{
+      const f=parse(ks[0]),l=parse(ks[ks.length-1]),minM=new Date(f.getFullYear(),f.getMonth(),1),maxM=new Date(l.getFullYear(),l.getMonth(),1);
+      if(!pm||pm<minM)pm=minM;if(pm>maxM)pm=maxM;
+      const y=pm.getFullYear(),m=pm.getMonth(),first=new Date(y,m,1),days=new Date(y,m+1,0).getDate();
+      h+=`<div class="monnav"><button class="navbtn" id="pmp" ${pm<=minM?'disabled':''} aria-label="이전 달">‹</button><strong>${y}년 ${m+1}월</strong><button class="navbtn" id="pmn" ${pm>=maxM?'disabled':''} aria-label="다음 달">›</button></div>
+      <div class="legend"><span>${U.heart(false)}예약 가능</span><span>${U.heart(true)}마감</span><span>왼쪽 오전 · 오른쪽 오후</span></div>
+      <div class="cal"><div class="wk">${['일','월','화','수','목','금','토'].map(w=>`<div>${w}</div>`).join('')}</div><div class="grid">`;
+      for(let i=0;i<first.getDay();i++)h+='<div></div>';
+      for(let d=1;d<=days;d++){
+        const k=key(new Date(y,m,d)),w=new Date(y,m,d).getDay(),info=S.days[k];
+        const cls=[];if(w===0||(info&&info.h))cls.push('hol');
+        if(!info||info.h){h+=`<div class="cell dim ${cls.join(' ')}"><span class="n">${d}</span></div>`;continue}
+        if(!(info.am||info.pm)){h+=`<div class="cell full ${cls.join(' ')}"><span class="n">${d}</span><span class="hs">${U.heart(true)}${U.heart(true)}</span></div>`;continue}
+        if(pd===k)cls.push('pick');if(picked(k,'am')||picked(k,'pm'))cls.push('sel');
+        h+=`<button class="cell ${cls.join(' ')}" data-d="${k}"><span class="n">${d}</span><span class="hs">${U.heart(!info.am)}${U.heart(!info.pm)}</span></button>`;
+      }
+      h+=`</div></div><div class="daypanel">${pd&&parse(pd).getMonth()===m?`<p class="t">${fmt(pd)}</p><div class="slots">${slotB(pd,'am')}${slotB(pd,'pm')}</div>`:'<p class="muted" style="margin:0">날짜를 누르면 오전·오후 시간이 나옵니다. 여러 날짜를 골라도 됩니다.</p>'}</div>`;
+    }
+    pk.innerHTML=h;
+    pk.querySelectorAll('[data-pv]').forEach(b=>b.onclick=()=>{pv=b.dataset.pv;store.set('pickMode',pv);draw()});
+    const mp=document.getElementById('pmp'),mn=document.getElementById('pmn');
+    if(mp)mp.onclick=()=>{pm=new Date(pm.getFullYear(),pm.getMonth()-1,1);pd=null;draw()};
+    if(mn)mn.onclick=()=>{pm=new Date(pm.getFullYear(),pm.getMonth()+1,1);pd=null;draw()};
+    pk.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{pd=c.dataset.d;draw()});
+    pk.querySelectorAll('.slot.open').forEach(b=>b.onclick=()=>toggle(b.dataset.k,b.dataset.s));
+  };
+  draw();
   upd();
   go.onclick=async()=>{
     try{
