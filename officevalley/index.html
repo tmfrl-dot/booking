@@ -81,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:05 수정본)</span></p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:10 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -317,10 +317,12 @@ function render(){
   const all=rows.map(r=>({r,left:Math.round((r.종료-base)/864e5)}))
     .filter(x=>late?(x.left<=days&&x.left>=0):x.left===days).sort((a,b)=>b.left-a.left||a.r.종료-b.r.종료);
   // 지점별 발송 대상 수 (남은 인원 포함)
-  const brs={};all.forEach(x=>{const b=x.r.지점||'지점 없음';(brs[b]=brs[b]||{n:0,left:0}).n++;if(!isDone(key(x.r)))brs[b].left++});
+  // 엑셀에 있는 지점은 오늘 대상이 없어도 모두 버튼으로 보여줌
+  const brs={};rows.forEach(r=>{const b=r.지점||'지점 없음';brs[b]=brs[b]||{n:0,left:0}});
+  all.forEach(x=>{const b=x.r.지점||'지점 없음';(brs[b]=brs[b]||{n:0,left:0}).n++;if(!isDone(key(x.r)))brs[b].left++});
   if(branch&&!brs[branch])brs[branch]={n:0,left:0};
   const names=Object.keys(brs).sort((a,b)=>a.localeCompare(b,'ko'));
-  const chip=(v,label,n,lf)=>`<button class="chip${lf?' left':''}" data-br="${v.replace(/"/g,'&quot;')}" aria-pressed="${branch===v}">${esc(label)}<small>${n}명${n?(lf?' · 남음 <b>'+lf+'</b>':' · 완료'):''}</small></button>`;
+  const chip=(v,label,n,lf)=>`<button class="chip${lf?' left':''}" data-br="${v.replace(/"/g,'&quot;')}" aria-pressed="${branch===v}">${esc(label)}<small>${n?n+'명'+(lf?' · 남음 <b>'+lf+'</b>':' · 완료'):'대상 없음'}</small></button>`;
   const totLeft=all.filter(x=>!isDone(key(x.r))).length;
   $('branches').innerHTML=names.length?chip('','전체',all.length,totLeft)+names.map(b=>chip(b,b,brs[b].n,brs[b].left)).join(''):'';
   $('branches').querySelectorAll('.chip').forEach(el=>el.onclick=()=>{branch=el.dataset.br;store.set('ov_branch',branch);render()});
