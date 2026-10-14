@@ -86,7 +86,8 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
       <input type="file" id="xl" accept=".xlsx,.xls,.csv">
       <span id="fileLabel">엑셀 파일을 눌러서 선택하세요 · 지금은 예시 3건이 들어 있습니다</span>
     </label>
-    <p class="note">엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 입금 계좌와 상품 요금은 엑셀의 계좌번호 시트(지점명·계좌번호·상품명·요금)에서 읽어 지점별로 넣습니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
+    <div class="small"><button id="clearData" hidden>저장된 엑셀 지우기</button></div>
+    <p class="note">불러온 엑셀은 이 기기에 저장되어 새로고침하거나 다시 열어도 남아 있습니다. 엑셀이 바뀌면 새 파일을 다시 불러와 주세요. 엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 입금 계좌와 상품 요금은 엑셀의 계좌번호 시트(지점명·계좌번호·상품명·요금)에서 읽어 지점별로 넣습니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
   </section>
 
   <section class="summary" id="summary"></section>
@@ -256,7 +257,11 @@ $('xl').addEventListener('change',async e=>{
     if(!all.length)throw err||new Error('읽을 수 있는 줄이 없습니다.');
     // 새 엑셀을 불러오면 카드에서 임시로 입력했던 번호는 지우고 엑셀 번호를 씀
     for(const k in edits){if(edits[k])delete edits[k].연락처}store.set('ov_edits',edits);
-    rows=all;isSample=false;$('fileLabel').textContent=f.name+' · '+all.length+'건 불러옴 (다른 파일은 다시 누르기)';render();
+    rows=all;isSample=false;
+    const saved={name:f.name,at:Date.now(),rows:all.map(r=>({...r,종료:iso(r.종료)})),acctMap,priceMap};
+    store.set('ov_data',saved);
+    if(!store.get('ov_data',null))toast('이 기기에 저장하지 못했습니다. 다음에 다시 불러와 주세요');
+    showFile(saved);render();
   }catch(x){toast(x.message)}
 });
 
@@ -347,7 +352,21 @@ $('acct').value=store.get('ov_acct','SC제일은행 652-10-015859');$('owner').v
 $('acct').addEventListener('input',()=>{store.set('ov_acct',$('acct').value);render()});
 $('owner').addEventListener('input',()=>{store.set('ov_owner',$('owner').value);render()});
 $('resetTpl').onclick=()=>{msgs=DEFAULT_MSGS.slice();store.set('ov_msgs2',msgs);drawTpl();render()};
-drawTpl();rows=SAMPLE;render();
+function showFile(d){
+  const t=new Date(d.at);
+  $('fileLabel').textContent=d.name+' · '+d.rows.length+'건 · '+(t.getMonth()+1)+'/'+t.getDate()+' '+String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0')+' 불러옴 (새 엑셀은 다시 누르기)';
+  $('clearData').hidden=false;
+}
+$('clearData').onclick=()=>{try{localStorage.removeItem('ov_data')}catch(e){}rows=SAMPLE;isSample=true;acctMap={};priceMap={'|베이직|12':264000};
+  $('fileLabel').textContent='엑셀 파일을 눌러서 선택하세요 · 지금은 예시 3건이 들어 있습니다';$('clearData').hidden=true;render()};
+drawTpl();
+// 마지막으로 불러온 엑셀을 이 기기에서 다시 꺼냄
+const savedData=store.get('ov_data',null);
+if(savedData&&Array.isArray(savedData.rows)&&savedData.rows.length){
+  rows=savedData.rows.map(r=>({...r,종료:parseDate(r.종료)})).filter(r=>r.종료);
+  acctMap=savedData.acctMap||{};priceMap=savedData.priceMap||{};isSample=false;showFile(savedData);
+}else rows=SAMPLE;
+render();
 </script>
 </body>
 </html>
