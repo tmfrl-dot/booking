@@ -81,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:15 수정본)</span></p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:20 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -305,8 +305,11 @@ const amount=r=>edits[key(r)]?.금액??priceOf(r).v;
 const phone=r=>(edits[key(r)]?.연락처||'').trim()||r.연락처||'';
 const acctInfo=r=>{const m=acctMap[brKey(r.지점)];return{계좌:r.계좌||m?.계좌||$('acct').value.trim(),예금주:m?.예금주||$('owner').value.trim()||'㈜보성',지점:!!(r.계좌||m)}};
 const acctOf=r=>acctInfo(r).계좌;
+// 청주 지점은 입금 안내에 '청주직영점'으로, 나머지는 각 지점명으로 표시 (계좌 시트 '안내명' 열이 있으면 그게 우선)
+const CHEONGJU=['가경1호','가경2호','영동','용암'];
+const brName=r=>acctMap[brKey(r.지점)]?.안내명||(CHEONGJU.includes(brKey(r.지점))?'청주직영점':(r.지점||''));
 const fill=(t,r)=>t.replaceAll('{업체명}',r.업체명).replaceAll('{대표자명}',r.대표자명).replaceAll('{종료일}',kdate(r.종료))
-  .replaceAll('{계좌}',acctOf(r)||'(계좌 입력 필요)').replaceAll('{예금주}',acctInfo(r).예금주).replaceAll('{지점}',acctMap[brKey(r.지점)]?.안내명||r.지점||'').replaceAll('{상품}',r.상품||'').replaceAll('{개월}',r.개월).replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
+  .replaceAll('{계좌}',acctOf(r)||'(계좌 입력 필요)').replaceAll('{예금주}',acctInfo(r).예금주).replaceAll('{지점}',brName(r)).replaceAll('{상품}',r.상품||'').replaceAll('{개월}',r.개월).replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
 const STEPS=[1,2,3,4]; // 문자 1~4
 const isDone=k=>STEPS.every(i=>getP(k).includes(i));
 const getP=k=>prog[k]||[];
