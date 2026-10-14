@@ -73,7 +73,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 이미지와 문자 4통을 순서대로 보냅니다.</p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다.</p>
   </header>
 
   <section class="panel">
@@ -102,7 +102,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 
   <details class="panel guide">
     <summary>안내 이미지</summary>
-    <p class="note">'이미지 보내기'가 안 되는 폰이라면 아래 이미지를 한 번 저장해두고 문자에 직접 첨부해 주세요.</p>
+    <p class="note">문자에 직접 첨부할 이미지입니다. 폰에 한 번 저장해두면 계속 쓸 수 있습니다.</p>
     <img src="guide.jpg" alt="오피스밸리 공식 연락번호 안내 이미지">
     <div class="small"><a class="btn" href="guide.jpg" download="오피스밸리_안내.jpg">이미지 저장</a></div>
   </details>
@@ -200,32 +200,24 @@ const amount=r=>edits[key(r)]?.금액??(r.요금*r.개월);
 const phone=r=>edits[key(r)]?.연락처??r.연락처;
 const fill=(t,r)=>t.replaceAll('{업체명}',r.업체명).replaceAll('{대표자명}',r.대표자명).replaceAll('{종료일}',kdate(r.종료))
   .replaceAll('{계좌}',$('acct').value||'(계좌 입력 필요)').replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
-const STEPS=5; // 0: 이미지, 1~4: 문자
+const STEPS=[1,2,3,4]; // 문자 1~4
+const isDone=k=>STEPS.every(i=>getP(k).includes(i));
 const getP=k=>prog[k]||[];
 function setStep(k,i,on){const p=new Set(getP(k));on?p.add(i):p.delete(i);prog[k]=[...p];store.set('ov_prog',prog)}
 
-let imgFile=null;
-async function getImg(){if(imgFile)return imgFile;const b=await (await fetch('guide.jpg')).blob();return imgFile=new File([b],'오피스밸리_안내.jpg',{type:'image/jpeg'})}
-async function shareImg(){
-  try{
-    const f=await getImg();
-    if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f]});return true}
-  }catch(e){if(e.name==='AbortError')return false}
-  toast('이 기기는 이미지 바로 보내기가 안 됩니다. 아래 안내 이미지를 저장해 첨부해 주세요');return false;
-}
 
 function render(){
   const base=parseDate($('base').value)||today(),days=Number($('days').value)||0,late=$('late').checked;
   const list=rows.map(r=>({r,left:Math.round((r.종료-base)/864e5)}))
     .filter(x=>late?(x.left<=days&&x.left>=0):x.left===days).sort((a,b)=>b.left-a.left||a.r.종료-b.r.종료);
-  const doneN=list.filter(x=>getP(key(x.r)).length>=STEPS).length;
+  const doneN=list.filter(x=>isDone(key(x.r))).length;
   $('summary').innerHTML=`<span>발송 대상</span><b>${list.length}명</b><span class="tag ok">완료 ${doneN}</span><span class="tag ${list.length-doneN?'warn':''}">남음 ${list.length-doneN}</span>`+
     (isSample?'<span class="tag warn">예시 데이터</span>':'')+`<span class="meta">${kdate(new Date(base.getTime()+days*864e5))} 종료 대상</span>`;
   const box=$('cards');
   if(!list.length){box.innerHTML=`<div class="panel empty">${kdate(base)} 기준으로 ${days}일 뒤 계약이 끝나는 고객이 없습니다.</div>`;return}
   box.innerHTML='';
   list.forEach(({r,left},ci)=>{
-    const k=key(r),p=getP(k),done=p.length>=STEPS;
+    const k=key(r),done=isDone(k);
     const c=document.createElement('article');c.className='card'+(done?' alldone':'');
     c.innerHTML=`<div class="head"><div><div class="who"></div><div class="meta inf"></div></div>
       <span class="tag ${done?'ok':(left===days?'':'warn')}">${done?'보냄':(left===0?'오늘 종료':'D-'+left)}</span></div>
@@ -239,18 +231,15 @@ function render(){
     phI.value=phone(r);amI.value=Number(amount(r)).toLocaleString('ko-KR');
     const draw=()=>{
       const p=getP(k),ph=phone(r).replace(/[^\d]/g,''),ok=ph.length>=10;
-      const next=[0,1,2,3,4].find(i=>!p.includes(i));
+      const next=STEPS.find(i=>!p.includes(i));
       ol.innerHTML='';
-      for(let i=0;i<STEPS;i++){
+      for(const i of STEPS){
         const li=document.createElement('li');li.className='step'+(p.includes(i)?' done':'')+(i===next?' next':'');
-        const txt=i===0?'공식 연락번호 안내 이미지':fill(msgs[i-1],r);
-        li.innerHTML=`<div class="n">${p.includes(i)?'✓':i+1}</div><div class="t"><b></b><span></span></div>`;
-        li.querySelector('b').textContent=i===0?'이미지 보내기':'문자 '+i+' · '+MSG_NAMES[i-1];
+        const txt=fill(msgs[i-1],r);
+        li.innerHTML=`<div class="n">${p.includes(i)?'✓':i}</div><div class="t"><b></b><span></span></div>`;
+        li.querySelector('b').textContent='문자 '+i+' · '+MSG_NAMES[i-1];
         li.querySelector('span').textContent=txt;
-        let go;
-        if(i===0){go=document.createElement('button');go.textContent=p.includes(0)?'다시':'보내기';
-          go.onclick=async()=>{if(phone(r))copyText(phone(r),'번호를 복사했습니다. 공유창에서 문자를 고른 뒤 받는 사람에 붙여넣으세요');const sent=await shareImg();if(sent||confirmLike(go)){setStep(k,0,true);draw();upd()}};}
-        else{go=document.createElement('a');go.href=ok?smsHref(ph,txt):'#';go.textContent=p.includes(i)?'다시':'보내기';
+        const go=document.createElement('a');{go.href=ok?smsHref(ph,txt):'#';go.textContent=p.includes(i)?'다시':'보내기';
           if(!ok)go.setAttribute('aria-disabled','true');
           go.onclick=()=>{setStep(k,i,true);setTimeout(()=>{draw();upd()},300)};}
         go.className+=' btn go';li.appendChild(go);
@@ -259,9 +248,7 @@ function render(){
         ol.appendChild(li);
       }
     };
-    const upd=()=>{const d=getP(k).length>=STEPS;c.classList.toggle('alldone',d);if(d)render()};
-    // 공유창에서 '보내기'를 고르지 않고 닫은 경우를 위해, 두 번째 누르면 완료로 처리
-    function confirmLike(btn){if(btn.dataset.ask){return true}btn.dataset.ask='1';btn.textContent='보냈으면 한 번 더';return false}
+    const upd=()=>{const d=isDone(k);c.classList.toggle('alldone',d);if(d)render()};
     draw();
     phI.oninput=()=>{edits[k]={...edits[k],연락처:phI.value};store.set('ov_edits',edits);draw()};
     amI.oninput=()=>{edits[k]={...edits[k],금액:num(amI.value)};store.set('ov_edits',edits);draw()};
@@ -285,7 +272,7 @@ $('acct').value=store.get('ov_acct','');
 ['base','days','late'].forEach(id=>$(id).addEventListener('input',render));
 $('acct').addEventListener('input',()=>{store.set('ov_acct',$('acct').value);render()});
 $('resetTpl').onclick=()=>{msgs=DEFAULT_MSGS.slice();store.set('ov_msgs',msgs);drawTpl();render()};
-drawTpl();rows=SAMPLE;render();getImg().catch(()=>{});
+drawTpl();rows=SAMPLE;render();
 </script>
 </body>
 </html>
