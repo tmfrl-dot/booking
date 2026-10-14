@@ -171,7 +171,19 @@ function parseDate(v){
   return null;
 }
 const COLS={대표자명:/대표자|성명|이름|고객명/,업체명:/업체|상호|회사/,종료:/종료날짜|종료일자|만료일|계약종료|종료일/,
-  요금:/요금|금액|이용료/,개월:/개월/,연락처:/연락처|휴대폰|핸드폰|전화|번호/,계좌:/계좌/,호수:/호수|호실/,지점:/지점/,상품:/상품/};
+  요금:/요금|금액|이용료/,개월:/개월/,연락처:/연락처|휴대폰|핸드폰|휴대전화|전화|hp|h\.p|폰|모바일|tel|번호/i,계좌:/계좌/,호수:/호수|호실/,지점:/지점/,상품:/상품/};
+// 휴대폰 번호 정리: 엑셀이 숫자로 저장해 앞의 0이 빠진 경우(1012345678)도 되살림, 여러 개면 첫 번호
+function cleanPhone(v){
+  if(v==null||v==='')return '';
+  if(typeof v==='number')v=String(Math.round(v));
+  const s=String(v);
+  const m=s.match(/0?1[016789][\s.\-)]*\d{3,4}[\s.\-]*\d{4}/);
+  if(!m)return s.trim();
+  let d=m[0].replace(/[^\d]/g,'');if(d[0]!=='0')d='0'+d;
+  return d.length===11?d.slice(0,3)+'-'+d.slice(3,7)+'-'+d.slice(7):d.slice(0,3)+'-'+d.slice(3,6)+'-'+d.slice(6);
+}
+const isPhone=v=>/^01[016789]-\d{3,4}-\d{4}$/.test(cleanPhone(v));
+function scorePhone(aoa,hi,col){let n=0;for(let r=hi+1;r<Math.min(aoa.length,hi+40);r++)if(isPhone(aoa[r]?.[col]))n++;return n}
 function scoreDate(aoa,hi,col){let n=0;for(let r=hi+1;r<Math.min(aoa.length,hi+30);r++)if(parseDate(aoa[r][col]))n++;return n}
 function readSheet(ws){
   const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
@@ -182,7 +194,14 @@ function readSheet(ws){
   for(const k in COLS){
     let c=head.map((h,i)=>COLS[k].test(h)?i:-1).filter(i=>i>=0);
     if(k==='종료')c.sort((a,b)=>scoreDate(aoa,hi,b)-scoreDate(aoa,hi,a));
-    if(k==='연락처')c=c.filter(i=>!/호수|호실|계좌/.test(head[i]));
+    if(k==='연락처'){
+      // '사업자번호'·'계좌번호'처럼 번호만 들어간 열은 빼고, 실제 휴대폰 번호가 가장 많이 든 열을 고름
+      c=c.filter(i=>!/호수|호실|계좌|사업자|등록|주민|우편|팩스|fax/i.test(head[i]));
+      const all=head.map((h,i)=>i);
+      const best=(c.length?c:all).map(i=>[i,scorePhone(aoa,hi,i)]).sort((a,b)=>b[1]-a[1])[0];
+      if(!best||best[1]===0){const any=all.map(i=>[i,scorePhone(aoa,hi,i)]).sort((a,b)=>b[1]-a[1])[0];c=any&&any[1]>0?[any[0]]:c}
+      else c=[best[0]];
+    }
     if(k==='요금')c=c.filter(i=>!/계좌/.test(head[i]));
     idx[k]=c.length?c[0]:-1;
   }
@@ -192,7 +211,7 @@ function readSheet(ws){
     const d=parseDate(g('종료'));if(!d||!String(g('대표자명')||g('업체명')).trim())continue;
     out.push({지점:String(g('지점')).trim(),대표자명:String(g('대표자명')).trim(),호수:String(g('호수')).trim(),
       업체명:String(g('업체명')).replace(/\s*\n\s*/g,'').trim(),상품:String(g('상품')).trim(),
-      요금:num(g('요금')),개월:num(g('개월'))||12,종료:d,연락처:String(g('연락처')).trim(),계좌:String(g('계좌')).trim()});
+      요금:num(g('요금')),개월:num(g('개월'))||12,종료:d,연락처:cleanPhone(g('연락처')),계좌:String(g('계좌')).trim()});
   }
   return out;
 }
@@ -235,6 +254,8 @@ $('xl').addEventListener('change',async e=>{
     // 행마다 적힌 계좌도 같은 지점의 다른 고객에게 씀
     all.forEach(r=>{if(r.계좌&&r.지점&&!acctMap[brKey(r.지점)])acctMap[brKey(r.지점)]={계좌:r.계좌,예금주:''}});
     if(!all.length)throw err||new Error('읽을 수 있는 줄이 없습니다.');
+    // 새 엑셀을 불러오면 카드에서 임시로 입력했던 번호는 지우고 엑셀 번호를 씀
+    for(const k in edits){if(edits[k])delete edits[k].연락처}store.set('ov_edits',edits);
     rows=all;isSample=false;$('fileLabel').textContent=f.name+' · '+all.length+'건 불러옴 (다른 파일은 다시 누르기)';render();
   }catch(x){toast(x.message)}
 });
@@ -245,7 +266,7 @@ function priceOf(r){const b=brKey(r.지점),p=pdKey(r.상품),m=r.개월;
   for(const k of [b+'|'+p+'|'+m,'|'+p+'|'+m,b+'|'+p,'|'+p])if(priceMap[k])return{v:priceMap[k],from:'요금표'};
   return{v:r.요금*r.개월,from:'계산'}}
 const amount=r=>edits[key(r)]?.금액??priceOf(r).v;
-const phone=r=>edits[key(r)]?.연락처??r.연락처;
+const phone=r=>(edits[key(r)]?.연락처||'').trim()||r.연락처||'';
 const acctInfo=r=>{const m=acctMap[brKey(r.지점)];return{계좌:r.계좌||m?.계좌||$('acct').value.trim(),예금주:m?.예금주||$('owner').value.trim()||'㈜보성',지점:!!(r.계좌||m)}};
 const acctOf=r=>acctInfo(r).계좌;
 const fill=(t,r)=>t.replaceAll('{업체명}',r.업체명).replaceAll('{대표자명}',r.대표자명).replaceAll('{종료일}',kdate(r.종료))
