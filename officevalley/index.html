@@ -81,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:10 수정본)</span></p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:15 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -105,7 +105,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
   <details class="panel">
     <summary>문자 내용·계좌 설정</summary>
     <div class="row"><label for="acct" style="flex:2;min-width:200px">기본 입금 계좌 (엑셀에 지점 계좌가 없을 때 사용)<input id="acct"></label><label for="owner" style="flex:1;min-width:120px">기본 예금주<input id="owner"></label></div>
-    <p class="note">{업체명} {대표자명} {종료일} {계좌} {예금주} {상품} {개월} {금액} 자리는 고객마다 자동으로 채워집니다.</p>
+    <p class="note">{지점} {업체명} {대표자명} {종료일} {계좌} {예금주} {상품} {개월} {금액} 자리는 고객마다 자동으로 채워집니다.</p>
     <div id="tplBox" style="display:flex;flex-direction:column;gap:10px"></div>
     <div class="small"><button id="resetTpl">기본 문구로 되돌리기</button></div>
   </details>
@@ -135,7 +135,7 @@ const DEFAULT_MSGS=[
 
 ** 담당자 연락처
 ☎ 010-2998-1938 ☎ 010-2412-1938`,
-`『청주직영점 입금 안내』
+`『{지점} 입금 안내』
 
 💳 입금계좌
 {계좌}
@@ -158,7 +158,8 @@ const smsHref=(phone,text)=>'sms:'+phone.replace(/[^\d]/g,'')+(isIOS?'&':'?')+'b
 let rows=[], isSample=true, branch=store.get('ov_branch','');
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let prog=store.get('ov_prog',{}), edits=store.get('ov_edits',{});
-let msgs=store.get('ov_msgs2',DEFAULT_MSGS); if(!Array.isArray(msgs)||msgs.length!==4)msgs=DEFAULT_MSGS.slice();
+let msgs=store.get('ov_msgs2',DEFAULT_MSGS);
+if(Array.isArray(msgs)&&typeof msgs[3]==='string')msgs[3]=msgs[3].replace('『청주직영점 입금 안내』','『{지점} 입금 안내』'); if(!Array.isArray(msgs)||msgs.length!==4)msgs=DEFAULT_MSGS.slice();
 
 const SAMPLE=[
  {지점:'가경2호',대표자명:'홍길동',호수:'B173',업체명:'예시상사',상품:'베이직',요금:22000,개월:12,종료:new Date(2026,9,18),연락처:''},
@@ -173,7 +174,7 @@ const num=v=>{if(typeof v==='number')return v;const n=String(v||'').replace(/[^\
 
 function parseDate(v){
   if(v==null||v==='')return null;
-  if(v instanceof Date&&!isNaN(v))return new Date(v.getFullYear(),v.getMonth(),v.getDate());
+  if(v instanceof Date&&!isNaN(v)){const t=new Date(v.getTime()+12*36e5);return new Date(t.getFullYear(),t.getMonth(),t.getDate())}
   if(typeof v==='number'&&v>20000&&v<80000){const d=new Date(Math.round((v-25569)*864e5));return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())}
   const s=String(v).trim();
   let m=s.match(/(\d{2,4})\s*[년.\-\/]\s*(\d{1,2})\s*[월.\-\/]\s*(\d{1,2})/);
@@ -238,16 +239,16 @@ function readInfoSheet(ws){
   const isHead=r=>{const t=r.map(c=>String(c).replace(/\s/g,''));return !t.some(x=>/종료|대표자/.test(x))&&(t.some(x=>/계좌/.test(x))||(t.some(x=>/상품/.test(x))&&t.some(x=>/요금|금액|가격/.test(x))))};
   for(const r of aoa){
     if(isHead(r)){const h=r.map(c=>String(c).replace(/\s/g,''));const f=re=>h.findIndex(x=>re.test(x));
-      cols={지점:f(/지점/),은행:f(/은행/),계좌:f(/계좌/),예금주:f(/예금주/),상품:f(/상품/),개월:f(/개월|기간/),요금:f(/요금|금액|가격/)};carry={};continue}
+      cols={지점:f(/지점(?!.*(안내|표시))/),안내명:f(/안내명|표시명|표시이름/),은행:f(/은행/),계좌:f(/계좌/),예금주:f(/예금주/),상품:f(/상품/),개월:f(/개월|기간/),요금:f(/요금|금액|가격/)};carry={};continue}
     if(!cols)continue;
     const g=k=>cols[k]>=0?String(r[cols[k]]??'').trim():'';
     if(!r.some(c=>String(c).trim()))continue;
-    for(const k of ['지점','은행','계좌','예금주']){if(g(k))carry[k]=g(k)}
+    for(const k of ['지점','은행','계좌','예금주','안내명']){if(g(k))carry[k]=g(k)}
     const br=brKey(g('지점')||carry.지점||'');
     if(g('계좌')||(cols.계좌>=0&&carry.계좌&&!acctMap[br])){
       let ac=g('계좌')||carry.계좌;const bank=g('은행')||carry.은행||'';
       if(bank&&!ac.includes(bank))ac=bank+' '+ac;
-      acctMap[br]={계좌:ac,예금주:g('예금주')||carry.예금주||''};n++;
+      acctMap[br]={계좌:ac,예금주:g('예금주')||carry.예금주||'',안내명:g('안내명')||carry.안내명||''};n++;
     }
     if(g('상품')&&num(g('요금'))){
       const m=num(g('개월')),pk=pdKey(g('상품'));const v=num(g('요금'));
@@ -275,7 +276,7 @@ let lastHead='';
 $('xl').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
-    const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});
+    const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:false});
     let all=[],err=null;acctMap={};priceMap={};
     for(const n of wb.SheetNames){if(readInfoSheet(wb.Sheets[n]))continue;try{all=all.concat(readSheet(wb.Sheets[n]))}catch(x){err=x}}
     // 행마다 적힌 계좌도 같은 지점의 다른 고객에게 씀
@@ -305,7 +306,7 @@ const phone=r=>(edits[key(r)]?.연락처||'').trim()||r.연락처||'';
 const acctInfo=r=>{const m=acctMap[brKey(r.지점)];return{계좌:r.계좌||m?.계좌||$('acct').value.trim(),예금주:m?.예금주||$('owner').value.trim()||'㈜보성',지점:!!(r.계좌||m)}};
 const acctOf=r=>acctInfo(r).계좌;
 const fill=(t,r)=>t.replaceAll('{업체명}',r.업체명).replaceAll('{대표자명}',r.대표자명).replaceAll('{종료일}',kdate(r.종료))
-  .replaceAll('{계좌}',acctOf(r)||'(계좌 입력 필요)').replaceAll('{예금주}',acctInfo(r).예금주).replaceAll('{상품}',r.상품||'').replaceAll('{개월}',r.개월).replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
+  .replaceAll('{계좌}',acctOf(r)||'(계좌 입력 필요)').replaceAll('{예금주}',acctInfo(r).예금주).replaceAll('{지점}',acctMap[brKey(r.지점)]?.안내명||r.지점||'').replaceAll('{상품}',r.상품||'').replaceAll('{개월}',r.개월).replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
 const STEPS=[1,2,3,4]; // 문자 1~4
 const isDone=k=>STEPS.every(i=>getP(k).includes(i));
 const getP=k=>prog[k]||[];
