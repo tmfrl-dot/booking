@@ -73,7 +73,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다.</p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 13:55 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -191,6 +191,7 @@ function readSheet(ws){
   const hi=aoa.findIndex(r=>r.some(c=>/대표자|업체/.test(String(c)))&&r.some(c=>/종료/.test(String(c))));
   if(hi<0)throw new Error('제목 줄(대표자명·업체명·종료날짜)을 찾지 못했습니다.');
   const head=aoa[hi].map(c=>String(c).replace(/\s/g,''));
+  lastHead=head.filter(Boolean).join(', ');
   const idx={};
   for(const k in COLS){
     let c=head.map((h,i)=>COLS[k].test(h)?i:-1).filter(i=>i>=0);
@@ -246,6 +247,21 @@ function readInfoSheet(ws){
   }
   return n;
 }
+// 모든 시트에서 '이름(대표자)·업체명 ↔ 휴대폰 번호'를 모아 둠 (연락처가 다른 시트나 다른 줄에 있어도 찾기 위해)
+function collectPhones(ws,map){
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  let nameCols=[];
+  for(const r of aoa){
+    const t=r.map(c=>String(c).replace(/\s/g,''));
+    if(t.some(x=>/대표자|성명|이름|고객명|업체|상호/.test(x))&&t.some(x=>/연락처|휴대|핸드폰|전화|hp|번호/i.test(x))){
+      nameCols=t.map((x,i)=>/대표자|성명|이름|고객명|업체|상호/.test(x)?i:-1).filter(i=>i>=0);continue}
+    const ph=r.map(cleanPhone).find(v=>/^01[016789]-\d{3,4}-\d{4}$/.test(v));
+    if(!ph)continue;
+    const names=(nameCols.length?nameCols.map(i=>r[i]):r).map(v=>brKey(v)).filter(v=>v&&!/^\d/.test(v)&&v.length<=30);
+    for(const n of names)if(!map[n])map[n]=ph;
+  }
+}
+let lastHead='';
 $('xl').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
@@ -253,6 +269,10 @@ $('xl').addEventListener('change',async e=>{
     let all=[],err=null;acctMap={};priceMap={};
     for(const n of wb.SheetNames){if(readInfoSheet(wb.Sheets[n]))continue;try{all=all.concat(readSheet(wb.Sheets[n]))}catch(x){err=x}}
     // 행마다 적힌 계좌도 같은 지점의 다른 고객에게 씀
+    const pmap={};for(const n of wb.SheetNames)collectPhones(wb.Sheets[n],pmap);
+    all.forEach(r=>{if(!isPhone(r.연락처)){const v=pmap[brKey(r.대표자명)]||pmap[brKey(r.업체명)];if(v)r.연락처=v}});
+    const noPh=all.filter(r=>!isPhone(r.연락처)).length;
+    if(noPh)setTimeout(()=>toast(noPh+'명은 엑셀에서 휴대폰 번호를 찾지 못했습니다. 읽은 제목: '+lastHead),900);
     all.forEach(r=>{if(r.계좌&&r.지점&&!acctMap[brKey(r.지점)])acctMap[brKey(r.지점)]={계좌:r.계좌,예금주:''}});
     if(!all.length)throw err||new Error('읽을 수 있는 줄이 없습니다.');
     // 새 엑셀을 불러오면 카드에서 임시로 입력했던 번호는 지우고 엑셀 번호를 씀
