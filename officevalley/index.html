@@ -86,7 +86,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
       <input type="file" id="xl" accept=".xlsx,.xls,.csv">
       <span id="fileLabel">엑셀 파일을 눌러서 선택하세요 · 지금은 예시 3건이 들어 있습니다</span>
     </label>
-    <p class="note">엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
+    <p class="note">엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 입금 계좌는 엑셀에 '계좌' 열을 만들거나, 지점명·계좌 두 열만 있는 시트를 하나 추가하면 지점별로 알아서 넣습니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
   </section>
 
   <section class="summary" id="summary"></section>
@@ -94,7 +94,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 
   <details class="panel">
     <summary>문자 내용·계좌 설정</summary>
-    <label for="acct">입금 계좌<input id="acct" placeholder="예: OO은행 000-0000-0000 (주)보성"></label>
+    <label for="acct">기본 입금 계좌 (엑셀에 지점 계좌가 없을 때만 사용)<input id="acct" placeholder="예: OO은행 000-0000-0000 (주)보성"></label>
     <p class="note">{업체명} {대표자명} {종료일} {계좌} {금액} 자리는 고객마다 자동으로 채워집니다.</p>
     <div id="tplBox" style="display:flex;flex-direction:column;gap:10px"></div>
     <div class="small"><button id="resetTpl">기본 문구로 되돌리기</button></div>
@@ -160,7 +160,7 @@ function parseDate(v){
   return null;
 }
 const COLS={대표자명:/대표자|성명|이름|고객명/,업체명:/업체|상호|회사/,종료:/종료날짜|종료일자|만료일|계약종료|종료일/,
-  요금:/요금|금액|이용료/,개월:/개월/,연락처:/연락처|휴대폰|핸드폰|전화|번호/,호수:/호수|호실/,지점:/지점/,상품:/상품/};
+  요금:/요금|금액|이용료/,개월:/개월/,연락처:/연락처|휴대폰|핸드폰|전화|번호/,계좌:/계좌/,호수:/호수|호실/,지점:/지점/,상품:/상품/};
 function scoreDate(aoa,hi,col){let n=0;for(let r=hi+1;r<Math.min(aoa.length,hi+30);r++)if(parseDate(aoa[r][col]))n++;return n}
 function readSheet(ws){
   const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
@@ -171,7 +171,8 @@ function readSheet(ws){
   for(const k in COLS){
     let c=head.map((h,i)=>COLS[k].test(h)?i:-1).filter(i=>i>=0);
     if(k==='종료')c.sort((a,b)=>scoreDate(aoa,hi,b)-scoreDate(aoa,hi,a));
-    if(k==='연락처')c=c.filter(i=>!/호수|호실/.test(head[i]));
+    if(k==='연락처')c=c.filter(i=>!/호수|호실|계좌/.test(head[i]));
+    if(k==='요금')c=c.filter(i=>!/계좌/.test(head[i]));
     idx[k]=c.length?c[0]:-1;
   }
   const out=[];
@@ -180,16 +181,29 @@ function readSheet(ws){
     const d=parseDate(g('종료'));if(!d||!String(g('대표자명')||g('업체명')).trim())continue;
     out.push({지점:String(g('지점')).trim(),대표자명:String(g('대표자명')).trim(),호수:String(g('호수')).trim(),
       업체명:String(g('업체명')).replace(/\s*\n\s*/g,'').trim(),상품:String(g('상품')).trim(),
-      요금:num(g('요금')),개월:num(g('개월'))||12,종료:d,연락처:String(g('연락처')).trim()});
+      요금:num(g('요금')),개월:num(g('개월'))||12,종료:d,연락처:String(g('연락처')).trim(),계좌:String(g('계좌')).trim()});
   }
   return out;
+}
+// 지점명·계좌 두 열만 있는 시트(예: '계좌' 시트)를 지점별 계좌표로 읽음
+const brKey=v=>String(v||'').replace(/\s/g,'').replace(/점$/,'');
+let acctMap={'가경2호':'(예시) OO은행 000-000000-00 (주)보성'};
+function readAcctSheet(ws){
+  const aoa=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+  const hi=aoa.findIndex(r=>r.some(c=>/지점/.test(String(c)))&&r.some(c=>/계좌/.test(String(c))));
+  if(hi<0||aoa[hi].some(c=>/종료/.test(String(c))))return 0;
+  const h=aoa[hi].map(c=>String(c).replace(/\s/g,''));const bi=h.findIndex(x=>/지점/.test(x)),ai=h.findIndex(x=>/계좌/.test(x));
+  let n=0;for(let r=hi+1;r<aoa.length;r++){const b=brKey(aoa[r][bi]),a=String(aoa[r][ai]).trim();if(b&&a){acctMap[b]=a;n++}}
+  return n;
 }
 $('xl').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
   try{
     const wb=XLSX.read(await f.arrayBuffer(),{type:'array',cellDates:true});
-    let all=[],err=null;
-    for(const n of wb.SheetNames){try{all=all.concat(readSheet(wb.Sheets[n]))}catch(x){err=x}}
+    let all=[],err=null;acctMap={};
+    for(const n of wb.SheetNames){if(readAcctSheet(wb.Sheets[n]))continue;try{all=all.concat(readSheet(wb.Sheets[n]))}catch(x){err=x}}
+    // 행마다 적힌 계좌도 같은 지점의 다른 고객에게 씀
+    all.forEach(r=>{if(r.계좌&&r.지점&&!acctMap[brKey(r.지점)])acctMap[brKey(r.지점)]=r.계좌});
     if(!all.length)throw err||new Error('읽을 수 있는 줄이 없습니다.');
     rows=all;isSample=false;$('fileLabel').textContent=f.name+' · '+all.length+'건 불러옴 (다른 파일은 다시 누르기)';render();
   }catch(x){toast(x.message)}
@@ -198,8 +212,9 @@ $('xl').addEventListener('change',async e=>{
 const key=r=>r.대표자명+'|'+r.업체명+'|'+iso(r.종료);
 const amount=r=>edits[key(r)]?.금액??(r.요금*r.개월);
 const phone=r=>edits[key(r)]?.연락처??r.연락처;
+const acctOf=r=>r.계좌||acctMap[brKey(r.지점)]||$('acct').value.trim();
 const fill=(t,r)=>t.replaceAll('{업체명}',r.업체명).replaceAll('{대표자명}',r.대표자명).replaceAll('{종료일}',kdate(r.종료))
-  .replaceAll('{계좌}',$('acct').value||'(계좌 입력 필요)').replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
+  .replaceAll('{계좌}',acctOf(r)||'(계좌 입력 필요)').replaceAll('{금액}',Number(amount(r)||0).toLocaleString('ko-KR'));
 const STEPS=[1,2,3,4]; // 문자 1~4
 const isDone=k=>STEPS.every(i=>getP(k).includes(i));
 const getP=k=>prog[k]||[];
@@ -219,7 +234,7 @@ function render(){
   list.forEach(({r,left},ci)=>{
     const k=key(r),done=isDone(k);
     const c=document.createElement('article');c.className='card'+(done?' alldone':'');
-    c.innerHTML=`<div class="head"><div><div class="who"></div><div class="meta inf"></div></div>
+    c.innerHTML=`<div class="head"><div><div class="who"></div><div class="meta inf"></div><div class="meta ac"></div></div>
       <span class="tag ${done?'ok':(left===days?'':'warn')}">${done?'보냄':(left===0?'오늘 종료':'D-'+left)}</span></div>
       <div class="fields"><label>연락처<input id="ph-${ci}" inputmode="tel" class="ph" placeholder="010-0000-0000"></label>
       <label>금액(원)<input id="am-${ci}" inputmode="numeric" class="am"></label></div>
@@ -227,6 +242,8 @@ function render(){
       <div class="small"><button class="rs">처음부터 다시</button></div>`;
     c.querySelector('.who').textContent=`${ci+1}. ${r.대표자명} · ${r.업체명}`;
     c.querySelector('.inf').textContent=[r.지점,r.호수,r.상품,'종료 '+kdate(r.종료)].filter(Boolean).join(' · ');
+    const ac=acctOf(r);c.querySelector('.ac').textContent=ac?'입금 계좌: '+ac:'입금 계좌가 없습니다. 엑셀에 지점 계좌를 넣거나 아래 설정에서 기본 계좌를 넣어 주세요';
+    if(!ac)c.querySelector('.ac').style.color='var(--warn)';
     const phI=c.querySelector('.ph'),amI=c.querySelector('.am'),ol=c.querySelector('.steps');
     phI.value=phone(r);amI.value=Number(amount(r)).toLocaleString('ko-KR');
     const draw=()=>{
