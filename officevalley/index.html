@@ -34,9 +34,17 @@ textarea{width:100%;min-height:110px;resize:vertical;line-height:1.5}
 button,.btn{font:inherit;font-weight:600;border-radius:7px;padding:9px 14px;cursor:pointer;border:1px solid var(--line);background:var(--surface);color:var(--fg);text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
 .file{border:1.5px dashed var(--line);border-radius:8px;padding:14px;text-align:center;color:var(--muted);cursor:pointer}
 .file input{display:none}
-.tag{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--tealsoft);color:var(--teal)}
+.tag{display:inline-block;white-space:nowrap;font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--tealsoft);color:var(--teal)}
 .tag.warn{background:var(--warnsoft);color:var(--warn)}
 .tag.ok{background:var(--donesoft);color:var(--done)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chips:empty{display:none}
+.chip{flex:none;font-size:14px;font-weight:600;padding:7px 12px;border-radius:99px;border:1px solid var(--line);background:var(--surface);color:var(--fg);display:inline-flex;gap:6px;align-items:center}
+.chip small{font-weight:500;color:var(--muted);font-variant-numeric:tabular-nums}
+.chip[aria-pressed="true"]{background:var(--navy);border-color:var(--navy);color:var(--surface)}
+.chip[aria-pressed="true"] small{color:var(--surface);opacity:.85}
+.chip.left small b{color:var(--warn)}
+.chip[aria-pressed="true"].left small b{color:inherit}
 .summary{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .summary b{font-size:20px;font-variant-numeric:tabular-nums}
 .cards{display:flex;flex-direction:column;gap:12px}
@@ -73,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 13:55 수정본)</span></p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:00 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -90,6 +98,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
     <p class="note">불러온 엑셀은 이 기기에 저장되어 새로고침하거나 다시 열어도 남아 있습니다. 엑셀이 바뀌면 새 파일을 다시 불러와 주세요. 엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 입금 계좌와 상품 요금은 엑셀의 계좌번호 시트(지점명·계좌번호·상품명·요금)에서 읽어 지점별로 넣습니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
   </section>
 
+  <nav class="chips" id="branches" aria-label="지점 선택"></nav>
   <section class="summary" id="summary"></section>
   <section class="cards" id="cards"></section>
 
@@ -146,7 +155,8 @@ const store={get(k,d){try{const v=localStorage.getItem(k);return v==null?d:JSON.
 const $=id=>document.getElementById(id);
 const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
 const smsHref=(phone,text)=>'sms:'+phone.replace(/[^\d]/g,'')+(isIOS?'&':'?')+'body='+encodeURIComponent(text);
-let rows=[], isSample=true;
+let rows=[], isSample=true, branch=store.get('ov_branch','');
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let prog=store.get('ov_prog',{}), edits=store.get('ov_edits',{});
 let msgs=store.get('ov_msgs2',DEFAULT_MSGS); if(!Array.isArray(msgs)||msgs.length!==4)msgs=DEFAULT_MSGS.slice();
 
@@ -304,13 +314,22 @@ function setStep(k,i,on){const p=new Set(getP(k));on?p.add(i):p.delete(i);prog[k
 
 function render(){
   const base=parseDate($('base').value)||today(),days=Number($('days').value)||0,late=$('late').checked;
-  const list=rows.map(r=>({r,left:Math.round((r.종료-base)/864e5)}))
+  const all=rows.map(r=>({r,left:Math.round((r.종료-base)/864e5)}))
     .filter(x=>late?(x.left<=days&&x.left>=0):x.left===days).sort((a,b)=>b.left-a.left||a.r.종료-b.r.종료);
+  // 지점별 발송 대상 수 (남은 인원 포함)
+  const brs={};all.forEach(x=>{const b=x.r.지점||'지점 없음';(brs[b]=brs[b]||{n:0,left:0}).n++;if(!isDone(key(x.r)))brs[b].left++});
+  if(branch&&!brs[branch])brs[branch]={n:0,left:0};
+  const names=Object.keys(brs).sort((a,b)=>a.localeCompare(b,'ko'));
+  const chip=(v,label,n,lf)=>`<button class="chip${lf?' left':''}" data-br="${v.replace(/"/g,'&quot;')}" aria-pressed="${branch===v}">${esc(label)}<small>${n}명${n?(lf?' · 남음 <b>'+lf+'</b>':' · 완료'):''}</small></button>`;
+  const totLeft=all.filter(x=>!isDone(key(x.r))).length;
+  $('branches').innerHTML=names.length>1||branch?chip('','전체',all.length,totLeft)+names.map(b=>chip(b,b,brs[b].n,brs[b].left)).join(''):'';
+  $('branches').querySelectorAll('.chip').forEach(el=>el.onclick=()=>{branch=el.dataset.br;store.set('ov_branch',branch);render()});
+  const list=branch?all.filter(x=>(x.r.지점||'지점 없음')===branch):all;
   const doneN=list.filter(x=>isDone(key(x.r))).length;
-  $('summary').innerHTML=`<span>발송 대상</span><b>${list.length}명</b><span class="tag ok">완료 ${doneN}</span><span class="tag ${list.length-doneN?'warn':''}">남음 ${list.length-doneN}</span>`+
+  $('summary').innerHTML=`<span>${branch?esc(branch)+' ':''}발송 대상</span><b>${list.length}명</b><span class="tag ok">완료 ${doneN}</span><span class="tag ${list.length-doneN?'warn':''}">남음 ${list.length-doneN}</span>`+
     (isSample?'<span class="tag warn">예시 데이터</span>':'')+`<span class="meta">${kdate(new Date(base.getTime()+days*864e5))} 종료 대상</span>`;
   const box=$('cards');
-  if(!list.length){box.innerHTML=`<div class="panel empty">${kdate(base)} 기준으로 ${days}일 뒤 계약이 끝나는 고객이 없습니다.</div>`;return}
+  if(!list.length){box.innerHTML=`<div class="panel empty">${kdate(base)} 기준으로 ${days}일 뒤 계약이 끝나는 ${branch?esc(branch)+' ':''}고객이 없습니다.</div>`;return}
   box.innerHTML='';
   list.forEach(({r,left},ci)=>{
     const k=key(r),done=isDone(k);
