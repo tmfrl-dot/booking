@@ -81,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:00 수정본)</span></p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:05 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -92,7 +92,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
     </div>
     <label class="file" for="xl">
       <input type="file" id="xl" accept=".xlsx,.xls,.csv">
-      <span id="fileLabel">엑셀 파일을 눌러서 선택하세요 · 지금은 예시 3건이 들어 있습니다</span>
+      <span id="fileLabel">엑셀 파일을 눌러서 불러오세요 · 아직 엑셀이 없어 화면 확인용 예시 고객 3명이 보입니다</span>
     </label>
     <div class="small"><button id="clearData" hidden>저장된 엑셀 지우기</button></div>
     <p class="note">불러온 엑셀은 이 기기에 저장되어 새로고침하거나 다시 열어도 남아 있습니다. 엑셀이 바뀌면 새 파일을 다시 불러와 주세요. 엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 입금 계좌와 상품 요금은 엑셀의 계좌번호 시트(지점명·계좌번호·상품명·요금)에서 읽어 지점별로 넣습니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
@@ -322,12 +322,12 @@ function render(){
   const names=Object.keys(brs).sort((a,b)=>a.localeCompare(b,'ko'));
   const chip=(v,label,n,lf)=>`<button class="chip${lf?' left':''}" data-br="${v.replace(/"/g,'&quot;')}" aria-pressed="${branch===v}">${esc(label)}<small>${n}명${n?(lf?' · 남음 <b>'+lf+'</b>':' · 완료'):''}</small></button>`;
   const totLeft=all.filter(x=>!isDone(key(x.r))).length;
-  $('branches').innerHTML=names.length>1||branch?chip('','전체',all.length,totLeft)+names.map(b=>chip(b,b,brs[b].n,brs[b].left)).join(''):'';
+  $('branches').innerHTML=names.length?chip('','전체',all.length,totLeft)+names.map(b=>chip(b,b,brs[b].n,brs[b].left)).join(''):'';
   $('branches').querySelectorAll('.chip').forEach(el=>el.onclick=()=>{branch=el.dataset.br;store.set('ov_branch',branch);render()});
   const list=branch?all.filter(x=>(x.r.지점||'지점 없음')===branch):all;
   const doneN=list.filter(x=>isDone(key(x.r))).length;
   $('summary').innerHTML=`<span>${branch?esc(branch)+' ':''}발송 대상</span><b>${list.length}명</b><span class="tag ok">완료 ${doneN}</span><span class="tag ${list.length-doneN?'warn':''}">남음 ${list.length-doneN}</span>`+
-    (isSample?'<span class="tag warn">예시 데이터</span>':'')+`<span class="meta">${kdate(new Date(base.getTime()+days*864e5))} 종료 대상</span>`;
+    (isSample?'<span class="tag warn">예시 고객 (실제 엑셀 아님)</span>':'')+`<span class="meta">${kdate(new Date(base.getTime()+days*864e5))} 종료 대상</span>`;
   const box=$('cards');
   if(!list.length){box.innerHTML=`<div class="panel empty">${kdate(base)} 기준으로 ${days}일 뒤 계약이 끝나는 ${branch?esc(branch)+' ':''}고객이 없습니다.</div>`;return}
   box.innerHTML='';
@@ -397,7 +397,7 @@ function showFile(d){
   $('clearData').hidden=false;
 }
 $('clearData').onclick=()=>{try{localStorage.removeItem('ov_data')}catch(e){}rows=SAMPLE;isSample=true;acctMap={};priceMap={'|베이직|12':264000};
-  $('fileLabel').textContent='엑셀 파일을 눌러서 선택하세요 · 지금은 예시 3건이 들어 있습니다';$('clearData').hidden=true;render()};
+  $('fileLabel').textContent='엑셀 파일을 눌러서 불러오세요 · 아직 엑셀이 없어 화면 확인용 예시 고객 3명이 보입니다';$('clearData').hidden=true;render()};
 drawTpl();
 // 마지막으로 불러온 엑셀을 이 기기에서 다시 꺼냄
 const savedData=store.get('ov_data',null);
