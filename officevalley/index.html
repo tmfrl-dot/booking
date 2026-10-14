@@ -81,7 +81,7 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
 <div class="wrap">
   <header>
     <h1>오피스밸리 갱신 안내 발송</h1>
-    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:20 수정본)</span></p>
+    <p class="sub">계약 종료 5일 전 고객을 골라, 갱신 안내 문자 4통을 순서대로 보냅니다. <span style="opacity:.6">(10/14 14:25 수정본)</span></p>
   </header>
 
   <section class="panel">
@@ -98,6 +98,8 @@ details summary{cursor:pointer;font-weight:600;color:var(--navy)}
     <p class="note">불러온 엑셀은 이 기기에 저장되어 새로고침하거나 다시 열어도 남아 있습니다. 엑셀이 바뀌면 새 파일을 다시 불러와 주세요. 엑셀에 연락처(휴대폰) 열이 있으면 자동으로 읽고, 없으면 카드에서 입력하면 됩니다. 입금 계좌와 상품 요금은 엑셀의 계좌번호 시트(지점명·계좌번호·상품명·요금)에서 읽어 지점별로 넣습니다. 엑셀 내용은 이 기기 안에서만 읽고 어디에도 올라가지 않습니다.</p>
   </section>
 
+  <label for="q" style="color:var(--fg)">고객 찾기 (이름·업체명, 날짜와 상관없이 전체에서 찾음)<input id="q" type="search" placeholder="예: 김예시"></label>
+  <section class="cards" id="found" hidden></section>
   <nav class="chips" id="branches" aria-label="지점 선택"></nav>
   <section class="summary" id="summary"></section>
   <section class="cards" id="cards"></section>
@@ -289,7 +291,7 @@ $('xl').addEventListener('change',async e=>{
     // 새 엑셀을 불러오면 카드에서 임시로 입력했던 번호는 지우고 엑셀 번호를 씀
     for(const k in edits){if(edits[k])delete edits[k].연락처}store.set('ov_edits',edits);
     rows=all;isSample=false;
-    const saved={name:f.name,at:Date.now(),rows:all.map(r=>({...r,종료:iso(r.종료)})),acctMap,priceMap};
+    const saved={v:2,name:f.name,at:Date.now(),rows:all.map(r=>({...r,종료:iso(r.종료)})),acctMap,priceMap};
     store.set('ov_data',saved);
     if(!store.get('ov_data',null))toast('이 기기에 저장하지 못했습니다. 다음에 다시 불러와 주세요');
     showFile(saved);render();
@@ -316,7 +318,20 @@ const getP=k=>prog[k]||[];
 function setStep(k,i,on){const p=new Set(getP(k));on?p.add(i):p.delete(i);prog[k]=[...p];store.set('ov_prog',prog)}
 
 
+function find(){
+  const q=brKey($('q').value).toLowerCase(),box=$('found');
+  if(!q){box.hidden=true;box.innerHTML='';return}
+  const base=parseDate($('base').value)||today(),days=Number($('days').value)||0;
+  const hit=rows.filter(r=>(brKey(r.대표자명)+'|'+brKey(r.업체명)).toLowerCase().includes(q));
+  box.hidden=false;
+  if(!hit.length){box.innerHTML=`<div class="panel empty">불러온 엑셀(${rows.length}명)에 '${esc($('q').value)}' 고객이 없습니다. 이름 칸이 비었거나 종료날짜를 읽지 못한 줄일 수 있습니다.</div>`;return}
+  box.innerHTML='<div class="panel" style="gap:8px">'+hit.map(r=>{
+    const left=Math.round((r.종료-base)/864e5),send=new Date(r.종료.getTime()-days*864e5);
+    const why=left===days?'<span class="tag">오늘 발송 대상</span>':left<0?'<span class="tag warn">이미 종료</span>':left<days?`<span class="tag warn">발송일 지남 (${send.getMonth()+1}/${send.getDate()})</span>`:`<span class="tag">${send.getMonth()+1}월 ${send.getDate()}일에 발송 대상</span>`;
+    return `<div><b>${esc(r.대표자명)} · ${esc(r.업체명)}</b> ${why}<div class="meta">${esc(r.지점||'지점 없음')} · 종료 ${kdate(r.종료)} (D-${left}) · 연락처 ${esc(r.연락처||'없음')}</div></div>`}).join('')+'</div>';
+}
 function render(){
+  find();
   const base=parseDate($('base').value)||today(),days=Number($('days').value)||0,late=$('late').checked;
   const all=rows.map(r=>({r,left:Math.round((r.종료-base)/864e5)}))
     .filter(x=>late?(x.left<=days&&x.left>=0):x.left===days).sort((a,b)=>b.left-a.left||a.r.종료-b.r.종료);
@@ -394,6 +409,7 @@ function drawTpl(){
 $('base').value=iso(today());
 $('acct').value=store.get('ov_acct','SC제일은행 652-10-015859');$('owner').value=store.get('ov_owner','㈜보성');
 ['base','days','late'].forEach(id=>$(id).addEventListener('input',render));
+$('q').addEventListener('input',find);
 $('acct').addEventListener('input',()=>{store.set('ov_acct',$('acct').value);render()});
 $('owner').addEventListener('input',()=>{store.set('ov_owner',$('owner').value);render()});
 $('resetTpl').onclick=()=>{msgs=DEFAULT_MSGS.slice();store.set('ov_msgs2',msgs);drawTpl();render()};
@@ -407,7 +423,9 @@ $('clearData').onclick=()=>{try{localStorage.removeItem('ov_data')}catch(e){}row
 drawTpl();
 // 마지막으로 불러온 엑셀을 이 기기에서 다시 꺼냄
 const savedData=store.get('ov_data',null);
-if(savedData&&Array.isArray(savedData.rows)&&savedData.rows.length){
+if(savedData&&savedData.v!==2){try{localStorage.removeItem('ov_data')}catch(e){}
+  setTimeout(()=>{$('fileLabel').textContent='앱이 고쳐져서 예전에 불러온 엑셀은 지웠습니다. 엑셀을 한 번 더 불러와 주세요';},0);rows=SAMPLE;
+}else if(savedData&&Array.isArray(savedData.rows)&&savedData.rows.length){
   rows=savedData.rows.map(r=>({...r,종료:parseDate(r.종료)})).filter(r=>r.종료);
   acctMap=savedData.acctMap||{};priceMap=savedData.priceMap||{};isSample=false;showFile(savedData);
 }else rows=SAMPLE;
