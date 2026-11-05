@@ -272,10 +272,12 @@ function openCust(cid){
       ${man?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-del="${b.id}">잘못 넣었어요 (지우기)</button></div>`:''}
       ${b.status==='hold'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-st="canceled" data-id="${b.id}">가예약 풀기</button></div><div class="muted">입금을 받으면 위 세션의 "입금 확인"을 눌러 주세요. 확정으로 바뀝니다.</div>`:''}
       ${b.status==='canceled'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-del="${b.id}">목록에서 지우기</button></div>`:''}</div>`}).join('')||'<p class="muted">기록이 없습니다.</p>'}
-    <button class="btn ghost" id="cl" style="margin-top:14px">닫기</button></div></div>`;
+    <button class="btn ghost" id="cl" style="margin-top:14px">닫기</button><button class="btn sm ghost" id="delc" style="margin-top:22px;color:var(--danger);border-color:var(--danger)">고객 삭제</button></div></div>`;
   const tTimer={};
   const close=()=>{closeSheet();render()};
   document.getElementById('cl').onclick=close;
+  document.getElementById('delc').onclick=async e=>{const bt=e.target;if(!bt.dataset.sure){bt.dataset.sure=1;bt.textContent='한 번 더 누르면 '+c.name+' 고객과 예약 기록이 모두 지워집니다';return}
+    try{await run(()=>api('admin_del_customer',{key:KEY,id:cid}),bt,'고객을 삭제했습니다');D=await api('admin_list',{key:KEY});store.set('adminD',D);openCid=null;closeSheet();render()}catch(x){}};
   document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
   const setS=(sid,dv)=>{const x=sessOf(sid);const nt=Math.max(1,Math.min(30,x.total+dv));const isLast=!sessList(cid).some(y=>y.no>x.no);if(nt<x.used&&isLast){toast(`예약이 ${x.used}건 잡혀 있어서 ${x.used}회보다 줄일 수 없어요`);return}x.total=nt;layer.querySelector(`[data-st2="${sid}"]`).textContent=x.total+'회';clearTimeout(tTimer[sid]);tTimer[sid]=setTimeout(async()=>{try{await run(()=>api('admin_sess_total',{key:KEY,id:sid,total:x.total}),null,x.no+'번째 세션을 '+x.total+'회로 저장했습니다');D=await api('admin_list',{key:KEY});if(layer.innerHTML)openCust(cid)}catch(e){}},700)};
   const setP=(sid,dv)=>{const x=sessOf(sid);const np=Math.max(0,Math.min(x.total-1,(x.prior||0)+dv));if(np===(x.prior||0))return;x.prior=np;layer.querySelector(`[data-pv="${sid}"]`).textContent=np+'회';clearTimeout(tTimer['p'+sid]);tTimer['p'+sid]=setTimeout(async()=>{try{await run(()=>api('admin_sess_prior',{key:KEY,id:sid,prior:np}),null,x.no+'번째 세션: 앱 밖에서 '+np+'회 진행으로 저장했습니다');D=await api('admin_list',{key:KEY});if(layer.innerHTML)openCust(cid)}catch(e){}},700)};
