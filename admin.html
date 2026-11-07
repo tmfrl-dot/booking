@@ -275,10 +275,10 @@ function openCust(cid){
       <div class="row"><input type="date" id="sd" value="${D.today}" style="flex:1;min-width:0;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--paper);color:var(--ink)"><button class="btn sm" style="margin-top:0" id="sgo">이 날짜 회차로 처리</button></div>
     </div>
     <b>고객 전용 페이지</b><div class="linkbox" style="margin:6px 0 4px">${esc(myLink(c.id))}</div>
-    <div class="row"><button class="btn sm ghost" style="margin-top:0" id="cpl">링크 복사</button>${up.length?'<button class="btn sm ghost" style="margin-top:0" id="resend">일정 문자 다시 보내기</button>':''}<button class="btn sm ghost" style="margin-top:0" id="paysms">입금 안내 문자</button></div>
-    ${needList(cid).length?`<h2 style="margin-top:20px">다시 잡을 일정</h2><div class="card" style="display:grid;gap:12px">${needList(cid).map(b=>`<div style="display:grid;gap:6px"><b>${fmtShort(b.date)} ${SL(b).short} · ${b.status==='noshow'?'불참':'취소'}</b><div class="row"><button class="btn sm" data-rb="${b.id}">새 날짜 잡기</button><button class="btn sm ghost" style="margin-top:0" data-ds="${b.id}">다시 안 잡기</button></div></div>`).join('')}<p class="muted" style="margin:0">고객이 예약 화면에서 직접 신청해 확정하면 자동으로 정리됩니다. 회차는 날짜 순서대로 다시 매겨집니다.</p></div>`:''}
-    <h2 style="margin-top:20px">회차 기록</h2>
-    ${list.map(b=>{const rem=side(b),man=(b.status==='done'&&/^P/.test(b.group||''))||rem;return `<div class="sess"><div class="h"><b>${fmtShort(b.date)} ${rem?'따로 진행':SL(b).short}${b.round?' · '+rlabel(b):''}</b><span class="badge ${lab[b.status][1]}">${lab[b.status][0]}${b.rebook?' · 다시 잡기':''}</span></div>
+    <div class="row"><button class="btn sm ghost" style="margin-top:0" id="cpl">링크 복사</button><button class="btn sm ghost" style="margin-top:0" id="resend">일정 문자 보내기</button><button class="btn sm ghost" style="margin-top:0" id="paysms">입금 안내 문자</button></div>
+    ${needList(cid).length?`<h2 style="margin-top:20px">다시 잡을 일정</h2><div class="card" style="display:grid;gap:12px">${needList(cid).length>1?`<div class="row" style="gap:6px;flex-wrap:wrap;margin:0"><button class="btn sm ghost" style="margin-top:0" id="rall">전체 선택</button><button class="btn sm" style="margin-top:0" id="rbulk" disabled>선택한 일정 새 날짜 잡기</button><button class="btn sm ghost" style="margin-top:0" id="dbulk" disabled>선택한 일정 다시 안 잡기</button></div>`:''}${needList(cid).map(b=>`<div style="display:grid;gap:6px"><label style="display:flex;gap:8px;align-items:center;cursor:pointer">${needList(cid).length>1?`<input type="checkbox" data-rsel="${b.id}" style="width:20px;height:20px;margin:0">`:''}<b>${fmtShort(b.date)} ${SL(b).short} · ${b.status==='noshow'?'불참':'취소'}</b></label><div class="row"><button class="btn sm" data-rb="${b.id}">새 날짜 잡기</button><button class="btn sm ghost" style="margin-top:0" data-ds="${b.id}">다시 안 잡기</button></div></div>`).join('')}<p class="muted" style="margin:0">고객이 예약 화면에서 직접 신청해 확정하면 자동으로 정리됩니다. 회차는 날짜 순서대로 다시 매겨집니다.</p></div>`:''}
+    <h2 style="margin-top:20px">회차 기록</h2><div class="row" id="cbar" hidden style="margin:0 0 8px"><button class="btn sm ghost" style="margin-top:0;color:var(--danger);border-color:var(--danger)" id="cbulk">선택한 일정 취소</button></div>
+    ${list.map(b=>{const rem=side(b),man=(b.status==='done'&&/^P/.test(b.group||''))||rem;const sel=b.date>=D.today&&((b.status==='confirmed'&&!rem)||b.status==='hold');return `<div class="sess"><div class="h"><b>${sel?`<input type="checkbox" data-csel="${b.id}" style="width:18px;height:18px;vertical-align:-3px;margin:0 6px 0 0">`:''}${fmtShort(b.date)} ${rem?'따로 진행':SL(b).short}${b.round?' · '+rlabel(b):''}</b><span class="badge ${lab[b.status][1]}">${lab[b.status][0]}${b.rebook?' · 다시 잡기':''}</span></div>
       ${b.status!=='canceled'?`<input class="memo-in" id="m-${b.id}" data-m="${b.id}" value="${esc(b.memo||'')}" placeholder="메모 (나만 보기)">`:''}
       ${b.status==='confirmed'&&!rem?`<div class="row"><button class="btn sm" data-st="done" data-id="${b.id}">완료 처리</button><button class="btn sm ghost" style="margin-top:0" data-st="noshow" data-id="${b.id}">불참</button><button class="btn sm ghost" style="margin-top:0" data-st="canceled" data-id="${b.id}">예약 취소</button></div>`:''}
       ${(b.status==='done'&&!man)||b.status==='noshow'?`<div class="row"><button class="btn sm ghost" style="margin-top:0" data-st="confirmed" data-id="${b.id}">되돌리기</button></div>`:''}
@@ -300,7 +300,7 @@ function openCust(cid){
   layer.querySelectorAll('[data-sp]').forEach(b=>b.onclick=()=>setS(b.dataset.sp,1));
   layer.querySelectorAll('[data-paid]').forEach(b=>b.onclick=async()=>{try{await run(()=>api('admin_sess_paid',{key:KEY,id:b.dataset.paid}),b,'입금 확인으로 바꿨습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}});
   layer.querySelectorAll('[data-unpaid]').forEach(b=>b.onclick=async()=>{if(!b.dataset.sure){b.dataset.sure=1;b.textContent='한 번 더 누르면 이 세션 일정이 가예약으로 바뀝니다';return}
-    try{const r=await run(()=>api('admin_sess_unpaid',{key:KEY,id:b.dataset.unpaid}),b);D=await api('admin_list',{key:KEY});if(r.held.length&&r.customer)smsSheet('가예약으로 돌렸습니다',`일정 ${r.held.length}건이 가예약이 되었고, 캘린더에는 "${r.customer.name} 가예약"으로 바뀌었습니다. 회차 이틀 전까지 입금이 없으면 자동으로 풀립니다.`,r.customer,holdText(r.customer,r.held),()=>openCust(cid));else openCust(cid)}catch(e){}});
+    try{await run(()=>api('admin_sess_unpaid',{key:KEY,id:b.dataset.unpaid}),b,'가예약으로 돌렸습니다 · 문자는 "입금 안내 문자"로 보내세요');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}});
   document.getElementById('snew').onclick=async e=>{const b=e.target;if(!b.dataset.sure){b.dataset.sure=1;b.textContent='한 번 더 누르면 4회 세션을 엽니다';return}
     try{await run(()=>api('admin_sess_new',{key:KEY,cid,total:4}),b,'새 세션을 열었습니다. 회차 수는 −/+로 조정하세요');D=await api('admin_list',{key:KEY});openCust(cid)}catch(x){}};
   document.getElementById('rdone').onclick=()=>{const f=document.getElementById('sidef');f.hidden=!f.hidden};
@@ -319,6 +319,21 @@ function openCust(cid){
   layer.querySelectorAll('[data-m]').forEach(i=>i.onchange=()=>{const b=D.bookings.find(x=>x.id===i.dataset.m);b.memo=i.value;run(()=>api('admin_memo',{key:KEY,id:b.id,memo:b.memo}),null,'메모를 저장했습니다').catch(()=>{})});
   const msg={done:'완료 처리했습니다',noshow:'불참으로 기록했습니다. 새 날짜를 잡아주세요',confirmed:'되돌렸습니다'};
   layer.querySelectorAll('[data-rb]').forEach(x=>x.onclick=()=>pickNew(cid,x.dataset.rb));
+  // 여러 일정 한꺼번에: 다시 잡을 일정 선택 → 새 날짜 / 정리
+  const selR=()=>[...layer.querySelectorAll('[data-rsel]:checked')].map(x=>x.dataset.rsel);
+  const rbk=document.getElementById('rbulk'),dbk=document.getElementById('dbulk'),ra=document.getElementById('rall');
+  const updR=()=>{const n=selR().length;if(!rbk)return;rbk.disabled=dbk.disabled=!n;rbk.textContent=n?`선택한 ${n}건 새 날짜 잡기`:'선택한 일정 새 날짜 잡기';dbk.textContent=n?`선택한 ${n}건 다시 안 잡기`:'선택한 일정 다시 안 잡기';delete dbk.dataset.sure};
+  layer.querySelectorAll('[data-rsel]').forEach(x=>x.onchange=updR);
+  if(ra)ra.onclick=()=>{const bs=[...layer.querySelectorAll('[data-rsel]')],all=bs.every(x=>x.checked);bs.forEach(x=>x.checked=!all);ra.textContent=all?'전체 선택':'전체 해제';updR()};
+  if(rbk)rbk.onclick=()=>{const ids=selR();if(ids.length)pickMany(cid,ids)};
+  if(dbk)dbk.onclick=async()=>{const ids=selR();if(!ids.length)return;if(!dbk.dataset.sure){dbk.dataset.sure=1;dbk.textContent=`한 번 더 누르면 ${ids.length}건 정리`;return}
+    try{await run(async()=>{for(const id of ids)await api('admin_dismiss',{key:KEY,id});return{}},dbk,`${ids.length}건을 다시 잡지 않는 일정으로 정리했습니다`);D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}};
+  // 회차 기록에서 앞으로의 일정 여러 개 골라 한꺼번에 취소
+  const selC=()=>[...layer.querySelectorAll('[data-csel]:checked')].map(x=>x.dataset.csel);
+  const cbk=document.getElementById('cbulk'),cbar=document.getElementById('cbar');
+  layer.querySelectorAll('[data-csel]').forEach(x=>x.onchange=()=>{const n=selC().length;cbar.hidden=!n;cbk.textContent=`선택한 ${n}건 취소`;delete cbk.dataset.sure});
+  cbk.onclick=async()=>{const ids=selC();if(!ids.length)return;if(!cbk.dataset.sure){cbk.dataset.sure=1;cbk.textContent=`한 번 더 누르면 ${ids.length}건 취소`;return}
+    try{await run(async()=>{for(const id of ids)await api('admin_status',{key:KEY,id,status:'canceled'});return{}},cbk,`${ids.length}건을 취소했습니다 · 확정이었던 일정은 "다시 잡을 일정"에 남아요`);D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}};
   layer.querySelectorAll('[data-ds]').forEach(x=>x.onclick=async()=>{
     if(!x.dataset.sure){x.dataset.sure=1;x.textContent='한 번 더 누르면 정리';return}
     try{await run(()=>api('admin_dismiss',{key:KEY,id:x.dataset.ds}),x,'다시 잡지 않는 일정으로 정리했습니다');D=await api('admin_list',{key:KEY});openCust(cid)}catch(e){}
@@ -327,11 +342,9 @@ function openCust(cid){
     const s=x.dataset.st,bk=D.bookings.find(y=>y.id===x.dataset.id);
     if(s==='canceled'&&!x.dataset.sure){x.dataset.sure=1;x.textContent=bk.status==='hold'?'한 번 더 누르면 풀기':'한 번 더 누르면 취소';return}
     try{
-      const r=await run(()=>api('admin_status',{key:KEY,id:x.dataset.id,status:s}),x,msg[s]);
+      await run(()=>api('admin_status',{key:KEY,id:x.dataset.id,status:s}),x,s==='canceled'?(bk.status==='hold'?'가예약을 풀었습니다':'취소했습니다 · "다시 잡을 일정"에 남아요'):msg[s]);
       D=await api('admin_list',{key:KEY});
-      if(s==='canceled'&&bk.status==='hold')smsSheet('가예약을 풀었습니다','캘린더에서 지웠고, 그 시간은 다른 분이 예약할 수 있게 열렸습니다.',r.customer,`안녕하세요, ${r.customer.name} 대표님 🤗\n${fmt(bk.date)} ${SL(bk).short} 가예약은 입금이 확인되지 않아 해제되었어요.\n다시 원하시면 아래 예약 화면에서 편한 시간을 골라 신청해 주세요.\n\n👉 예약하기\n${BASE}\n\n궁금하신 점은 이 번호로 편하게 연락 주세요 🥹\n감사합니다 🥰`,()=>openCust(cid));
-      else if(s==='canceled')smsSheet('취소했습니다','캘린더에서 지웠고, 뒤 일정 회차는 날짜 순서대로 다시 매겼습니다. 이 일정은 "다시 잡을 일정"에 남아 있습니다.',r.customer,smsText(r.customer,`${fmt(bk.date)} ${SL(bk).short} 일정은 취소되었어요.\n새 날짜는 편하실 때 예약 화면에서 골라주시거나, 연락 주시면 다시 잡아드릴게요.`,r.upcoming),()=>openCust(cid));
-      else openCust(cid);
+      openCust(cid);
     }catch(e){}
   });
 }
@@ -450,9 +463,31 @@ async function addFor(cid){
       D=await api('admin_list',{key:KEY});
       const sk=r.skipped&&r.skipped.length?' '+r.skipped.map(x=>fmtShort(x.date)+' '+SL(x).tag).join(', ')+'은 그사이 마감되어 빠졌습니다.':'';
       const cv=r.converted?' '+r.converted+'건은 이미 입금 확인된 세션 안이라 확정으로 등록했습니다.':'';
-      if(r.mode==='hold'&&r.held.length)smsSheet('가예약으로 잡았습니다','가족 캘린더에 "'+r.customer.name+' 가예약"으로 등록했습니다.'+cv+sk,r.customer,holdText(r.customer,r.held),()=>openCust(cid));
-      else smsSheet('확정했습니다','가족 캘린더에 등록했고, 회차는 날짜 순서대로 매겼습니다.'+(r.mode==='hold'?cv:'')+sk,r.customer,smsText(r.customer,'컨설팅 예약이 확정되어 안내드려요.',r.upcoming,r.newIds),()=>openCust(cid));
+      toast((r.mode==='hold'&&r.held.length?'가예약으로 잡았습니다.':'확정했습니다.')+(r.mode==='hold'?cv:'')+sk+' 문자는 고객 창 버튼으로 보내세요');
+      openCust(cid);
     }catch(e){}
+  };
+}
+// 다시 잡을 일정 여러 개를 새 날짜 여러 개로 한꺼번에 옮김 (날짜 순서대로 짝지음)
+async function pickMany(cid,ids){
+  const c=cust(cid),olds=ids.map(id=>D.bookings.find(x=>x.id===id)).filter(Boolean).sort(order),picks=[];
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>${esc(c.name)} 새 날짜 ${olds.length}건 잡기</h3><p class="muted" style="margin:0 0 8px">${olds.map(b=>fmtShort(b.date)+' '+SL(b).tag).join(', ')} 대신 잡을 시간을 ${olds.length}개까지 골라주세요. 날짜 순서대로 바뀝니다.</p><button class="btn" id="go" disabled style="margin:0 0 12px">시간을 골라주세요</button><div id="pk">${loading('빈 시간을 불러오고 있습니다')}</div><button class="btn ghost" id="cl">닫기</button></div></div>`;
+  const back=()=>openCust(cid);
+  document.getElementById('cl').onclick=back;
+  document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')back()};
+  const go=document.getElementById('go');
+  const upd=()=>{go.disabled=!picks.length;go.textContent=picks.length?`${picks.length}건 새 날짜로 확정하기`:'시간을 골라주세요'};
+  let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('pk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
+  const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm));
+  const pk=document.getElementById('pk');
+  const on=(k,s)=>picks.some(x=>x.date===k&&x.slot===s);
+  const draw=()=>{pk.innerHTML=ks.length?`<div class="days">${ks.map(k=>`<div class="day"><div class="dayhead"><b>${fmt(k)}</b></div><div class="slots">${['am','pm'].map(s=>S.days[k][s]?`<button class="slot open" data-k="${k}" data-s="${s}" style="${on(k,s)?'background:var(--heart-soft);border-color:var(--heart)':''}"><span class="t">${SLOTS[s].label}</span>${on(k,s)?'<span class="s" style="color:var(--heart);font-weight:700">고름</span>':''}</button>`:`<div class="slot off"><span class="t">${SLOTS[s].label}</span><span class="s">마감</span></div>`).join('')}</div></div>`).join('')}</div>`:'<div class="card muted">비어 있는 시간이 없습니다.</div>';
+    pk.querySelectorAll('.slot.open').forEach(b=>b.onclick=()=>{const i=picks.findIndex(x=>x.date===b.dataset.k&&x.slot===b.dataset.s);if(i>=0)picks.splice(i,1);else{if(picks.length>=olds.length){toast(`${olds.length}개까지 고를 수 있어요`);return}picks.push({date:b.dataset.k,slot:b.dataset.s})}upd();draw()})};
+  draw();upd();
+  go.onclick=async()=>{
+    const ps=picks.slice().sort(order);let okN=0;
+    try{await run(async()=>{for(let i=0;i<ps.length;i++){await api('admin_rebook',{key:KEY,cid,bid:olds[i].id,date:ps[i].date,slot:ps[i].slot});okN++}return{}},go);}catch(e){}
+    D=await api('admin_list',{key:KEY});if(okN)toast(`${okN}건 새 날짜를 잡았습니다 · 문자는 "일정 문자 보내기"로 보내세요`);openCust(cid);
   };
 }
 async function pickNew(cid,bid){
@@ -470,7 +505,7 @@ async function pickNew(cid,bid){
     try{
       const r=await run(()=>api('admin_rebook',{key:KEY,cid,bid,date:b.dataset.k,slot:b.dataset.s}),null);
       D=await api('admin_list',{key:KEY});
-      smsSheet('새 날짜를 잡았습니다','가족 캘린더에 등록했고, 회차는 날짜 순서대로 다시 매겼습니다.',r.customer,smsText(r.customer,'취소되었던 일정을 새 날짜로 다시 잡아 안내드려요.',r.upcoming,r.newIds),()=>openCust(cid));
+      toast('새 날짜를 잡았습니다 · 문자는 "일정 문자 보내기"로 보내세요');openCust(cid);
     }catch(e){}
   });
 }
