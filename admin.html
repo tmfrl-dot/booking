@@ -180,8 +180,8 @@ function render(){
 // head: 첫 문장, up: 앞으로의 확정 일정(회차 포함), newIds: 이번에 새로 잡힌 일정
 function smsText(c,head,up,newIds){
   const mark=newIds&&newIds.length&&up.some(b=>!newIds.includes(b.id));
-  const lines=up.length?up.map(b=>`· ${fmt(b.date)} ${b.side?'따로 진행':SL(b).label} — ${b.round}회차${mark&&newIds.includes(b.id)?' (새 일정)':''}`).join('\n'):'· 남은 확정 일정이 없어요.';
-  return `안녕하세요, ${c.name} 대표님 🤗\n${head}\n\n📅 앞으로의 일정 (총 ${c.total}회)\n${lines}\n\n👉 내 일정 보기\n${myLink(c.id)}\n\n변경이 필요하시면 이 번호로 편하게 연락 주세요 🥹\n감사합니다 🥰`;
+  const lines=up.length?up.map(b=>`📅 ${fmt(b.date)} ${b.side?'따로 진행':SL(b).label.split(' ~ ')[0]} — ${b.round}회차${mark&&newIds.includes(b.id)?' (새 일정)':''}`).join('\n'):'📅 남은 확정 일정이 없습니다.';
+  return `안녕하세요, ${c.name} 대표님 🤗\n${head}\n\n${lines}\n\n👉 내 일정 보기\n${myLink(c.id)}\n\n일정 변경이 필요하시면 이 번호로 편하게 연락 주세요 🥹\n감사합니다 🥰`;
 }
 function smsSheet(title,sub,c,text,after){
   layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet">
@@ -202,7 +202,7 @@ function smsSheet(title,sub,c,text,after){
 async function confirmG(g,btn){
   try{
     const r=await run(()=>api('admin_confirm',{key:KEY,group:g}),btn);
-    smsSheet('확정했습니다',`가족 캘린더에 ${r.newIds.length}건을 등록했습니다.${r.clash&&r.clash.length?' '+r.clash.map(x=>fmtShort(x.date)+' '+SL(x).tag).join(', ')+'은 마감되어 제외하고, 나머지 회차는 확정되었습니다. 마감된 회차는 "다시 잡을 일정"에 남아 있어 빈 날짜로 다시 등록할 수 있습니다.':''}`,r.customer,smsText(r.customer,'컨설팅 예약이 확정되어 안내드려요.',r.upcoming,r.newIds),()=>load(true));
+    smsSheet('확정했습니다',`가족 캘린더에 ${r.newIds.length}건을 등록했습니다.${r.clash&&r.clash.length?' '+r.clash.map(x=>fmtShort(x.date)+' '+SL(x).tag).join(', ')+'은 마감되어 제외하고, 나머지 회차는 확정되었습니다. 마감된 회차는 "다시 잡을 일정"에 남아 있어 빈 날짜로 다시 등록할 수 있습니다.':''}`,r.customer,smsText(r.customer,'컨설팅 예약이 확정되었습니다.',r.upcoming,r.newIds),()=>load(true));
   }catch(e){load(true)}
 }
 // 입금 문자 두 가지: 확인 요청(가예약·입금 전 일정) / 컨설팅 입금 안내(시작 날짜는 예약된 일정에 맞춰 자동)
