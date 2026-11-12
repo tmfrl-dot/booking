@@ -433,13 +433,14 @@ async function addFor(cid){
   mode='confirmed';
   layer.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;layer.querySelectorAll('[data-m]').forEach(x=>x.classList.toggle('ghost',x!==b));upd()});
   let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('pk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
-  const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm));
+  const H=S.holds||{},holdN=(k,sl)=>(H[k]&&H[k][sl]||[]).map(id=>(cust(id)||{name:'?'}).name).join(', ');
+  const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm||H[k]));
   const pk=document.getElementById('pk');
   // 달력 / 목록 보기 (고객 화면처럼 하트로 빈 시간 표시)
   let pv=store.get('pickMode')||'cal',pm=null,pd=null;
   const picked=(k,sl)=>picks.some(x=>!x.start&&x.date===k&&x.slot===sl);
-  const toggle=(k,sl)=>{const i=picks.findIndex(x=>!x.start&&x.date===k&&x.slot===sl);if(i>=0)picks.splice(i,1);else picks.push({date:k,slot:sl});upd();draw()};
-  const slotB=(k,sl)=>S.days[k]&&S.days[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="${picked(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span>${picked(k,sl)?'<span class="s" style="color:var(--heart);font-weight:700">고름 · 다시 누르면 취소</span>':''}</button>`:`<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">마감</span></div>`;
+  const toggle=(k,sl)=>{const i=picks.findIndex(x=>!x.start&&x.date===k&&x.slot===sl);if(i>=0)picks.splice(i,1);else picks.push({date:k,slot:sl,takeHold:!(S.days[k]&&S.days[k][sl])&&!!(H[k]&&H[k][sl])});upd();draw()};
+  const slotB=(k,sl)=>S.days[k]&&S.days[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="${picked(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span>${picked(k,sl)?'<span class="s" style="color:var(--heart);font-weight:700">고름 · 다시 누르면 취소</span>':''}</button>`:(H[k]&&H[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="border-style:dashed;${picked(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span><span class="s" style="color:var(--wait)">${picked(k,sl)?'고름 · '+holdN(k,sl)+'님 가예약을 풀고 잡아요':'가예약 '+holdN(k,sl)+'님 · 눌러서 이 자리에 잡기'}</span></button>`:`<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">마감</span></div>`);
   const draw=()=>{
     if(!ks.length){pk.innerHTML='<div class="card muted">비어 있는 시간이 없습니다.</div>';return}
     let h=`<div class="row" style="margin:0 0 10px;gap:8px"><button class="btn sm${pv==='cal'?'':' ghost'}" style="margin:0" data-pv="cal">달력으로 보기</button><button class="btn sm${pv==='list'?'':' ghost'}" style="margin:0" data-pv="list">목록으로 보기</button></div>`;
@@ -456,7 +457,7 @@ async function addFor(cid){
         const k=key(new Date(y,m,d)),w=new Date(y,m,d).getDay(),info=S.days[k];
         const cls=[];if(w===0||(info&&info.h))cls.push('hol');
         if(!info||info.h){h+=`<div class="cell dim ${cls.join(' ')}"><span class="n">${d}</span></div>`;continue}
-        if(!(info.am||info.pm)){h+=`<div class="cell full ${cls.join(' ')}"><span class="n">${d}</span><span class="hs">${U.heart(true)}${U.heart(true)}</span></div>`;continue}
+        if(!(info.am||info.pm||H[k])){h+=`<div class="cell full ${cls.join(' ')}"><span class="n">${d}</span><span class="hs">${U.heart(true)}${U.heart(true)}</span></div>`;continue}
         if(pd===k)cls.push('pick');if(picked(k,'am')||picked(k,'pm'))cls.push('sel');
         h+=`<button class="cell ${cls.join(' ')}" data-d="${k}"><span class="n">${d}</span><span class="hs">${U.heart(!info.am)}${U.heart(!info.pm)}</span></button>`;
       }
@@ -493,13 +494,14 @@ async function pickMany(cid,ids){
   const go=document.getElementById('go');
   const upd=()=>{go.disabled=!picks.length;go.textContent=picks.length?`${picks.length}건 새 날짜로 확정하기`:'시간을 골라주세요'};
   let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('pk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
-  const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm));
+  const H=S.holds||{},holdN=(k,sl)=>(H[k]&&H[k][sl]||[]).map(id=>(cust(id)||{name:'?'}).name).join(', ');
+  const ks=Object.keys(S.days).sort().filter(k=>!S.days[k].h&&(S.days[k].am||S.days[k].pm||H[k]));
   const pk=document.getElementById('pk');
   const on=(k,s)=>picks.some(x=>x.date===k&&x.slot===s);
-  const toggle=(k,sl)=>{const i=picks.findIndex(x=>x.date===k&&x.slot===sl);if(i>=0)picks.splice(i,1);else{if(picks.length>=olds.length){if(olds.length===1)picks.splice(0,1);else{toast(`${olds.length}개까지 고를 수 있어요`);return}}picks.push({date:k,slot:sl})}upd();draw()};
+  const toggle=(k,sl)=>{const i=picks.findIndex(x=>x.date===k&&x.slot===sl);if(i>=0)picks.splice(i,1);else{if(picks.length>=olds.length){if(olds.length===1)picks.splice(0,1);else{toast(`${olds.length}개까지 고를 수 있어요`);return}}picks.push({date:k,slot:sl,takeHold:!(S.days[k]&&S.days[k][sl])&&!!(H[k]&&H[k][sl])})}upd();draw()};
   // 달력 / 목록 보기 (일정 잡아드리기 화면과 같은 방식)
   let pv=store.get('pickMode')||'cal',pm=null,pd=null;
-  const slotB=(k,sl)=>S.days[k]&&S.days[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="${on(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span>${on(k,sl)?'<span class="s" style="color:var(--heart);font-weight:700">고름 · 다시 누르면 취소</span>':''}</button>`:`<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">마감</span></div>`;
+  const slotB=(k,sl)=>S.days[k]&&S.days[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="${on(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span>${on(k,sl)?'<span class="s" style="color:var(--heart);font-weight:700">고름 · 다시 누르면 취소</span>':''}</button>`:(H[k]&&H[k][sl]?`<button class="slot open" data-k="${k}" data-s="${sl}" style="border-style:dashed;${on(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span><span class="s" style="color:var(--wait)">${on(k,sl)?'고름 · '+holdN(k,sl)+'님 가예약을 풀고 잡아요':'가예약 '+holdN(k,sl)+'님 · 눌러서 이 자리에 잡기'}</span></button>`:`<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">마감</span></div>`);
   const draw=()=>{
     if(!ks.length){pk.innerHTML='<div class="card muted">비어 있는 시간이 없습니다.</div>';return}
     let h=`<div class="row" style="margin:0 0 10px;gap:8px"><button class="btn sm${pv==='cal'?'':' ghost'}" style="margin:0" data-pv="cal">달력으로 보기</button><button class="btn sm${pv==='list'?'':' ghost'}" style="margin:0" data-pv="list">목록으로 보기</button></div>`;
@@ -516,7 +518,7 @@ async function pickMany(cid,ids){
         const k=key(new Date(y,m,d)),w=new Date(y,m,d).getDay(),info=S.days[k];
         const cls=[];if(w===0||(info&&info.h))cls.push('hol');
         if(!info||info.h){h+=`<div class="cell dim ${cls.join(' ')}"><span class="n">${d}</span></div>`;continue}
-        if(!(info.am||info.pm)){h+=`<div class="cell full ${cls.join(' ')}"><span class="n">${d}</span><span class="hs">${U.heart(true)}${U.heart(true)}</span></div>`;continue}
+        if(!(info.am||info.pm||H[k])){h+=`<div class="cell full ${cls.join(' ')}"><span class="n">${d}</span><span class="hs">${U.heart(true)}${U.heart(true)}</span></div>`;continue}
         if(pd===k)cls.push('pick');if(on(k,'am')||on(k,'pm'))cls.push('sel');
         h+=`<button class="cell ${cls.join(' ')}" data-d="${k}"><span class="n">${d}</span><span class="hs">${U.heart(!info.am)}${U.heart(!info.pm)}</span></button>`;
       }
@@ -533,7 +535,7 @@ async function pickMany(cid,ids){
   draw();upd();
   go.onclick=async()=>{
     const ps=picks.slice().sort(order);let okN=0;
-    try{await run(async()=>{for(let i=0;i<ps.length;i++){await api('admin_rebook',{key:KEY,cid,bid:olds[i].id,date:ps[i].date,slot:ps[i].slot});okN++}return{}},go);}catch(e){}
+    try{await run(async()=>{for(let i=0;i<ps.length;i++){await api('admin_rebook',{key:KEY,cid,bid:olds[i].id,date:ps[i].date,slot:ps[i].slot,takeHold:!!ps[i].takeHold});okN++}return{}},go);}catch(e){}
     D=await api('admin_list',{key:KEY});if(okN)toast(`${okN}건 새 날짜를 잡았습니다 · 문자는 "일정 문자 보내기"로 보내세요`);openCust(cid);
   };
 }
