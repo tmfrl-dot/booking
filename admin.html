@@ -22,7 +22,7 @@ const {C,SLOTS,SL,key,parse,addDays,fmt,fmtShort,esc,brand,loading,api,toast,cop
 const app=document.getElementById('app'),layer=document.getElementById('layer');
 let openCid=null;
 const closeSheet=()=>{layer.innerHTML='';openCid=null};
-let KEY=store.get('adminKey'), D=null, tab='req', schMode=store.get('schMode')||'cal', schMonth=null, schDay=null;
+let KEY=store.get('adminKey'), D=null, tab='req', schMode=store.get('schMode')||'cal', schMonth=null, schDay=null, schAdd=false, schPick=[];
 const BASE=location.href.split('#')[0].split('?')[0].replace(/admin\.html$/,'');
 const myLink=cid=>BASE+'?c='+cid;
 const isIOS=/iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -122,9 +122,10 @@ function render(){
     D.bookings.filter(b=>active(b)&&b.date>=today).forEach(b=>{const c=cust(b.cid)||{name:'?'};items.push({k:b.date,s:side(b)?'all':b.slot,t:b.start||'',b,c:b.status==='confirmed'?'ok':(b.status==='hold'?'hold':'wait'),short:c.name,html:`<b>컨설팅 ${esc(c.name)}${b.status==='confirmed'?' '+rlabel(b):''}${side(b)?' · 따로 진행':''}</b> <span class="badge ${b.status==='confirmed'?'b-ok':(b.status==='hold'?'b-no':'b-wait')}">${b.status==='confirmed'?'확정':(b.status==='hold'?'가예약':((sessOf(b.session)||{}).status==='입금대기'?'입금 전 신청':'대기'))}</span>`})});
     const so={am:0,pm:1,all:-1};items.sort((a,b)=>a.k.localeCompare(b.k)||so[a.s]-so[b.s]||(a.t||'').localeCompare(b.t||''));
     const li=it=>`<li><span class="d">${fmtShort(it.k)}<br><span class="muted">${it.s==='all'?'종일':(it.b?SL(it.b).short:SLOTS[it.s].short)}</span></span><div>${it.html}</div></li>`;
-    p.innerHTML=`<div class="row" style="margin:0 0 10px;gap:8px"><button class="btn sm${schMode==='cal'?'':' ghost'}" style="margin:0" data-sm="cal">달력으로 보기</button><button class="btn sm${schMode==='list'?'':' ghost'}" style="margin:0" data-sm="list">목록으로 보기</button><button class="btn sm ghost" style="margin:0" id="blk">시간 막기 / 풀기</button></div><div id="schb"></div>`;
+    p.innerHTML=`<div class="row" style="margin:0 0 10px;gap:8px"><button class="btn sm${schMode==='cal'?'':' ghost'}" style="margin:0" data-sm="cal">달력으로 보기</button><button class="btn sm${schMode==='list'?'':' ghost'}" style="margin:0" data-sm="list">목록으로 보기</button><button class="btn sm ghost" style="margin:0" id="blk">시간 막기 / 풀기</button>${schMode==='cal'?`<button class="btn sm${schAdd?'':' ghost'}" style="margin:0" id="sadd">${schAdd?'추가 그만두기':'+ 일정 추가'}</button>`:''}</div><div id="schb"></div>`;
     p.querySelectorAll('[data-sm]').forEach(b=>b.onclick=()=>{schMode=b.dataset.sm;store.set('schMode',schMode);render()});
     document.getElementById('blk').onclick=blockSheet;
+    const sad=document.getElementById('sadd');if(sad)sad.onclick=()=>{schAdd=!schAdd;schPick=[];render()};
     const sb=document.getElementById('schb');
     if(schMode==='list'){sb.innerHTML=`<p class="muted" style="margin-top:0">앞으로의 컨설팅 예약과, 예약 시간대에 걸친 가족 캘린더 일정입니다.</p><ul class="sched">${items.map(li).join('')||'<li>일정이 없습니다.</li>'}</ul>`}
     else{
@@ -134,20 +135,24 @@ function render(){
       if(!schMonth||schMonth<minM)schMonth=minM;if(schMonth>maxM&&maxM>minM)schMonth=maxM;
       const y=schMonth.getFullYear(),m=schMonth.getMonth(),first=new Date(y,m,1),days=new Date(y,m+1,0).getDate();
       let h=`<div class="monnav"><button class="navbtn" id="smp" ${schMonth<=minM?'disabled':''} aria-label="이전 달">‹</button><strong>${y}년 ${m+1}월</strong><button class="navbtn" id="smn" ${schMonth>=maxM?'disabled':''} aria-label="다음 달">›</button></div>
-      <div class="legend acl"><span><i class="chip ok">이름</i>확정</span><span><i class="chip hold">이름</i>가예약</span><span><i class="chip wait">이름</i>신청 대기</span><span><i class="chip fam">일정</i>개인·가족</span></div>
+      ${schAdd?`<div class="card" style="margin:0 0 8px;padding:10px 12px;border-color:var(--heart)"><b>일정 추가</b> · 추가할 날짜를 누르세요. 여러 날짜를 고를 수 있어요.</div>`:''}<div class="legend acl"><span><i class="chip ok">이름</i>확정</span><span><i class="chip hold">이름</i>가예약</span><span><i class="chip wait">이름</i>신청 대기</span><span><i class="chip fam">일정</i>개인·가족</span></div>
       <div class="cal acal"><div class="wk">${['일','월','화','수','목','금','토'].map(w=>`<div>${w}</div>`).join('')}</div><div class="grid">`;
       for(let i=0;i<first.getDay();i++)h+='<div></div>';
       for(let d=1;d<=days;d++){
         const k=key(new Date(y,m,d)),w=new Date(y,m,d).getDay(),l=byDay[k]||[];
-        const cls=[];if(k===today)cls.push('today');if(w===0)cls.push('hol');if(k<today)cls.push('dim');if(schDay===k)cls.push('pick');
+        const cls=[];if(k===today)cls.push('today');if(w===0)cls.push('hol');if(k<today)cls.push('dim');if(schAdd?schPick.includes(k):schDay===k)cls.push('pick');
         const ch=l.slice(0,3).map(it=>`<i class="chip ${it.c}">${esc(it.short)}</i>`).join('')+(l.length>3?`<i class="chip more">+${l.length-3}</i>`:'');
         h+=`<button class="cell ${cls.join(' ')}" data-d="${k}"><span class="n">${d}</span>${ch}</button>`;
       }
-      h+=`</div></div><div class="daypanel" id="sdp"></div>`;
+      h+=`</div></div>${schAdd?`<button class="btn" id="snext" ${schPick.length?'':'disabled'} style="position:sticky;bottom:12px;z-index:5">${schPick.length?schPick.length+'일 선택 · 고객과 시간 고르기':'날짜를 골라주세요'}</button>`:''}<div class="daypanel" id="sdp"></div>`;
       sb.innerHTML=h;
       document.getElementById('smp').onclick=()=>{schMonth=new Date(y,m-1,1);schDay=null;render()};
       document.getElementById('smn').onclick=()=>{schMonth=new Date(y,m+1,1);schDay=null;render()};
       // 날짜를 누르면 화면은 그대로 두고, 그날 일정이 아래에서 위로 올라오는 창으로 뜸
+      if(schAdd){
+        sb.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{const k=c.dataset.d;if(k<today){toast('지난 날짜는 고를 수 없어요');return}const i=schPick.indexOf(k);if(i>=0)schPick.splice(i,1);else schPick.push(k);render()});
+        document.getElementById('snext').onclick=()=>{if(schPick.length)schAddSheet(schPick.slice().sort())};
+      } else
       sb.querySelectorAll('.cell[data-d]').forEach(c=>c.onclick=()=>{
         sb.querySelectorAll('.cell.pick').forEach(x=>x.classList.remove('pick'));c.classList.add('pick');schDay=c.dataset.d;
         const l=byDay[schDay]||[];
@@ -155,7 +160,7 @@ function render(){
         const close=()=>{layer.innerHTML=''};
         document.getElementById('cl').onclick=close;document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
       });
-      document.getElementById('sdp').innerHTML='<p class="muted" style="margin:0">날짜를 누르면 그날 일정이 위로 올라와 자세히 보입니다.</p>';
+      document.getElementById('sdp').innerHTML=schAdd?'':'<p class="muted" style="margin:0">날짜를 누르면 그날 일정이 위로 올라와 자세히 보입니다.</p>';
     }
   }
   if(tab==='msg'){
@@ -362,6 +367,47 @@ function openCust(cid){
       openCust(cid);
     }catch(e){}
   });
+}
+// 일정 탭 달력에서 고른 날짜들에 고객 일정 한꺼번에 추가
+async function schAddSheet(dates){
+  const picks=[];let mode='confirmed';
+  const cs=D.customers.slice().sort((a,b)=>{const na=D.bookings.some(x=>x.cid===a.id&&active(x)),nb=D.bookings.some(x=>x.cid===b.id&&active(x));return nb-na||a.name.localeCompare(b.name,'ko')});
+  layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>일정 추가 · ${dates.length}일</h3>
+    <div class="field"><label for="scu">고객</label><select id="scu" style="width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--paper);color:var(--ink)"><option value="">고객을 골라주세요</option>${cs.map(c=>`<option value="${c.id}">${esc(c.name)}${c.biz?' · '+esc(c.biz):''}</option>`).join('')}</select></div>
+    <p class="muted" style="margin:-4px 0 8px;font-size:13px">처음 오시는 분은 고객 회차 탭의 "+ 고객 직접 등록"으로 먼저 등록해 주세요.</p>
+    <div class="row" style="margin-bottom:8px"><button class="btn sm" data-md="confirmed" style="margin-top:0">확정 (입금 완료)</button><button class="btn sm ghost" data-md="hold" style="margin-top:0">가예약 (입금 전)</button></div>
+    <button class="btn" id="sgo2" disabled style="margin:0 0 12px">고객과 시간을 골라주세요</button>
+    <div id="spk">${loading('빈 시간을 불러오고 있습니다')}</div>
+    <button class="btn ghost" id="cl">닫기</button></div></div>`;
+  const close=()=>{layer.innerHTML=''};
+  document.getElementById('cl').onclick=close;
+  document.getElementById('bg').onclick=e=>{if(e.target.id==='bg')close()};
+  const go=document.getElementById('sgo2'),sel=document.getElementById('scu');
+  const upd=()=>{go.disabled=!picks.length||!sel.value;go.textContent=!sel.value?'고객을 골라주세요':(picks.length?picks.length+'건 '+(mode==='hold'?'가예약으로':'확정으로')+' 등록하기':'시간을 골라주세요')};
+  sel.onchange=upd;
+  layer.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>{mode=b.dataset.md;layer.querySelectorAll('[data-md]').forEach(x=>x.classList.toggle('ghost',x!==b));upd()});
+  let S;try{S=await api('admin_slots',{key:KEY})}catch(e){document.getElementById('spk').innerHTML=`<div class="errbox">${esc(e.message)}</div>`;return}
+  const H=S.holds||{},holdN=(k,sl)=>(H[k]&&H[k][sl]||[]).map(id=>(cust(id)||{name:'?'}).name).join(', ');
+  const on=(k,sl)=>picks.some(x=>x.date===k&&x.slot===sl);
+  const pk=document.getElementById('spk');
+  const slotB=(k,sl)=>{const d=S.days[k];
+    if(d&&d.h)return `<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">${esc(d.h)}</span></div>`;
+    if(d&&d[sl])return `<button class="slot open" data-k="${k}" data-s="${sl}" style="${on(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span>${on(k,sl)?'<span class="s" style="color:var(--heart);font-weight:700">고름 · 다시 누르면 취소</span>':''}</button>`;
+    if(H[k]&&H[k][sl])return `<button class="slot open" data-k="${k}" data-s="${sl}" style="border-style:dashed;${on(k,sl)?'background:var(--heart-soft);border-color:var(--heart);color:var(--ink)':''}"><span class="t">${SLOTS[sl].label}</span><span class="s" style="color:var(--wait)">${on(k,sl)?'고름 · '+holdN(k,sl)+'님 가예약을 풀고 잡아요':'가예약 '+holdN(k,sl)+'님 · 눌러서 이 자리에 잡기'}</span></button>`;
+    return `<div class="slot off"><span class="t">${SLOTS[sl].label}</span><span class="s">${d?'마감':'예약 받는 날이 아니에요'}</span></div>`};
+  const draw=()=>{pk.innerHTML=`<div class="days">${dates.map(k=>`<div class="day"><div class="dayhead"><b>${fmt(k)}</b></div><div class="slots">${slotB(k,'am')}${slotB(k,'pm')}</div></div>`).join('')}</div>`;
+    pk.querySelectorAll('.slot.open').forEach(b=>b.onclick=()=>{const k=b.dataset.k,sl=b.dataset.s,i=picks.findIndex(x=>x.date===k&&x.slot===sl);if(i>=0)picks.splice(i,1);else picks.push({date:k,slot:sl,takeHold:!(S.days[k]&&S.days[k][sl])&&!!(H[k]&&H[k][sl])});upd();draw()})};
+  draw();upd();
+  go.onclick=async()=>{
+    const cid=sel.value;if(!cid||!picks.length)return;
+    try{
+      const r=await run(()=>api('admin_add',{key:KEY,cid,items:picks,mode}),go);
+      const sk=r.skipped&&r.skipped.length?' '+r.skipped.map(x=>fmtShort(x.date)+' '+SL(x).tag).join(', ')+'은 그사이 마감되어 빠졌습니다.':'';
+      D=await api('admin_list',{key:KEY});store.set('adminD',D);
+      toast((r.mode==='hold'?'가예약으로 잡았습니다.':'확정했습니다.')+sk+' 문자는 고객 창 버튼으로 보내세요');
+      schAdd=false;schPick=[];layer.innerHTML='';render();
+    }catch(e){}
+  };
 }
 async function blockSheet(){
   layer.innerHTML=`<div class="sheet-bg" id="bg"><div class="sheet"><h3>예약 받지 않을 시간</h3>
